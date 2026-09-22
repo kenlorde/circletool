@@ -155,10 +155,45 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
   const { proposal } = useProposal(tradingWs, tradingIsConnected, proposalParams);
 
   const buyContract = useCallback(async () => {
-    if (proposal) {
-      await buyWithProposal(proposal);
+    if (!proposal) return;
+
+    // Execute the trade on the currently logged-in account first.
+    const masterResult = await buyWithProposal(proposal);
+
+    // Only request a copy after the master trade succeeds.
+    try {
+        const response = await fetch('/api/copy-trade', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                symbol: activeSymbol?.underlying_symbol,
+                contractType: contractMode,
+                amount: parseFloat(stake),
+                duration,
+                durationUnit: 't',
+                barrier: selectedDigit,
+            }),
+        });
+
+        if (!response.ok) {
+            console.error('Copy trade failed:', await response.text());
+        }
+    } catch (error) {
+        console.error('Copy trade error:', error);
     }
-  }, [proposal, buyWithProposal]);
+
+    return masterResult;
+}, [
+    proposal,
+    buyWithProposal,
+    activeSymbol,
+    contractMode,
+    stake,
+    duration,
+    selectedDigit,
+]);
 
   return {
     isConnected,
