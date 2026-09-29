@@ -15,6 +15,7 @@ import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { CurrentTickDisplay } from './current-tick-display';
 import { DigitStatsBar } from './digit-stats-bar';
 import { LegacyDigitTape } from './legacy-digit-tape';
+import { MobileTradingTerminal } from './mobile-trading-terminal';
 import { TradeControls } from './trade-controls';
 import { ConfigurableDigitsControls, ConfigurableBuyButton } from './configurable-digits-controls';
 import { TradeTypeChips } from '@/components/custom/trade-type-chips';
@@ -177,7 +178,7 @@ export function DigitsView({
   // Pinning is a mobile affordance: on desktop the controls card grows to fit,
   // so the Buy button is never scroll-clipped and a viewport-wide bar under a
   // 400px column would look detached.
-  const pinBuy = !!appConfig?.buy?.pinned && isMobile;
+  const pinBuy = !!appConfig?.buy?.pinned && isMobile && !!editMode;
   // With Buy unpinned the footer still has to sit at the end of the mobile
   // column — and a `fixed` footer makes that column reserve clearance for it.
   // That reservation was a guess (`pb-28`, 112px) for a footer that measures
@@ -357,7 +358,19 @@ export function DigitsView({
       {/* Spacer to push content below fixed header — taller when authenticated (account bar visible) */}
       <div className={authState === 'authenticated' ? 'h-[76px] shrink-0' : 'h-[66px] shrink-0'} />
 
-      {appConfig ? (
+      {!editMode && isMobile ? (
+        isLoading ? <Skeleton className="mx-3 h-[70vh] rounded-xl" /> : (
+          <MobileTradingTerminal
+            symbols={symbols} activeSymbol={activeSymbol} selectSymbol={selectSymbol}
+            currentTick={currentTick} lastDigit={lastDigit} digitStats={digitStats} pipSize={pipSize}
+            tradeType={tradeType} setTradeType={setTradeType} contractMode={contractMode}
+            setContractMode={setContractMode} selectedDigit={selectedDigit} setSelectedDigit={setSelectedDigit}
+            stake={stake} setStake={setStake} duration={duration} setDuration={setDuration}
+            durationLimits={durationLimits} proposal={proposal} isConnected={isConnected}
+            isBuying={isBuying} onBuy={handleBuy} isAuthenticated={authState === 'authenticated'}
+          />
+        )
+      ) : appConfig ? (
         isMobile ? (
           /* No-code mobile layout: a single, reorderable column of blocks. */
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
