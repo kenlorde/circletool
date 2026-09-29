@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { Activity, BarChart3, BriefcaseBusiness, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, BarChart3, BriefcaseBusiness, ChevronDown, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
 import type { ActiveSymbol, Tick, ProposalInfo, DurationLimits } from '@deriv/core';
 import type { ContractMode, DigitStats, TradeType } from '@/lib/types';
@@ -57,6 +57,8 @@ interface MobileTradingTerminalProps {
 export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   const marketRef = useRef<HTMLElement>(null);
   const tradeRef = useRef<HTMLElement>(null);
+  const [showTradeTypes, setShowTradeTypes] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const {
     symbols, activeSymbol, selectSymbol, currentTick, lastDigit, digitStats, pipSize,
     tradeType, setTradeType, contractMode, setContractMode, selectedDigit, setSelectedDigit,
@@ -67,34 +69,37 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   const minPct = Math.min(...digitStats.percentages);
   const modes = MODES[tradeType];
   const selectedMode = modes.find((mode) => mode.value === contractMode) ?? modes[0];
+  const cursorStyle = lastDigit === null ? undefined : {
+    left: `${((lastDigit % 5) + 0.5) * 20}%`,
+    top: lastDigit < 5 ? '-14px' : 'calc(var(--digit-size) + 4px)',
+  } as CSSProperties;
 
   return (
     <div className="mobile-terminal">
       <nav className="mobile-terminal-nav" aria-label="Trading sections">
-        <button type="button" className="active" onClick={() => tradeRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <button type="button" className="active" onClick={() => tradeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}>
           <Monitor size={20} /> Manual Trader
         </button>
+        <Link href="/copy-trading"><BriefcaseBusiness size={20} /> Copy Trading</Link>
         <button type="button" onClick={() => marketRef.current?.scrollIntoView({ behavior: 'smooth' })}>
-          <BarChart3 size={20} /> Markets
+          <BarChart3 size={20} /> Charts
         </button>
         {isAuthenticated && <Link href="/reports"><BriefcaseBusiness size={20} /> Positions</Link>}
       </nav>
 
       <section ref={marketRef} className="mobile-market" aria-label="Live market">
         <div className="mobile-market-selector">
-          <Activity size={30} aria-hidden />
+          <div className="mobile-market-icon"><Activity size={24} aria-hidden /><small>100 ¹ˢ</small></div>
           <div className="mobile-market-name">
-            <span className="mobile-market-eyebrow">LIVE MARKET</span>
             <SymbolSelector symbols={symbols} activeSymbol={activeSymbol} onSymbolChange={selectSymbol} />
+            <span className="mobile-market-subquote">{currentTick ? Number(currentTick.quote).toFixed(pipSize) : 'Waiting for ticks…'} <span>▲</span></span>
           </div>
         </div>
-        <div className="mobile-market-quote" aria-live="off">
-          {currentTick ? Number(currentTick.quote).toFixed(pipSize) : 'Waiting for ticks…'}
-          {lastDigit !== null && <span className="mobile-market-last">Last digit {lastDigit}</span>}
-        </div>
         <div className="mobile-digit-grid" aria-label="Last digit frequency">
+          {lastDigit !== null && <span className="mobile-digit-cursor" style={cursorStyle} aria-label={`Moving cursor on digit ${lastDigit}`} />}
           {digitStats.percentages.map((pct, digit) => {
             const selected = selectedDigit === digit;
+            const isLatest = lastDigit === digit;
             const highest = digitStats.totalTicks > 0 && pct === maxPct;
             const lowest = digitStats.totalTicks > 0 && pct === minPct;
             const accent = highest ? '#25aaa4' : lowest ? '#d84b55' : '#686d71';
@@ -105,7 +110,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
                 onClick={() => setSelectedDigit(digit)}
                 aria-label={`Digit ${digit}, ${pct.toFixed(1)} percent`}
                 aria-pressed={selected}
-                className={`mobile-digit ${selected ? 'selected' : ''}`}
+                className={`mobile-digit ${selected ? 'selected' : ''} ${isLatest ? 'latest' : ''}`}
                 style={{ background: `conic-gradient(${accent} ${Math.min(pct * 3.6, 360)}deg, #282b2d 0)` }}
               >
                 <span><strong>{digit}</strong><small>{pct.toFixed(1)}%</small></span>
@@ -113,18 +118,23 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
             );
           })}
         </div>
-        <div className="mobile-market-scroll" aria-hidden><ChevronLeft size={22} /><span>Live digit statistics</span><ChevronRight size={22} /></div>
+        <div className="mobile-market-scroll" aria-hidden><ChevronLeft size={26} /><ChevronRight size={26} /></div>
       </section>
 
       <section ref={tradeRef} className="mobile-trade" aria-label="Manual trading controls">
         <div className="mobile-trade-handle" aria-hidden />
-        <p className="mobile-trade-kicker">MANUAL TRADER</p>
-        <h2>{TRADE_TYPES.find((type) => type.value === tradeType)?.label}</h2>
-        <div className="mobile-trade-types" role="group" aria-label="Trade type">
-          {TRADE_TYPES.map((type) => (
-            <button type="button" key={type.value} aria-pressed={tradeType === type.value} onClick={() => setTradeType(type.value)}>{type.label}</button>
-          ))}
+        <button type="button" className="mobile-learn" onClick={() => setShowHelp((show) => !show)} aria-expanded={showHelp}>Learn about this trade type</button>
+        {showHelp && <p className="mobile-help">Choose a digit, stake, and duration. Over wins when the final digit is higher than your chosen digit; Under wins when it is lower.</p>}
+        <div className="mobile-trade-title-row">
+          <button type="button" className="mobile-trade-title" onClick={() => setShowTradeTypes((show) => !show)} aria-expanded={showTradeTypes}>
+            <span className="mobile-trade-symbol"><TrendingUp size={20} /><TrendingDown size={20} /></span>
+            <span>{TRADE_TYPES.find((type) => type.value === tradeType)?.label}</span><ChevronDown size={17} />
+          </button>
+          <button type="button" className="mobile-help-orb" aria-label="Trade help" onClick={() => setShowHelp((show) => !show)}>?</button>
         </div>
+        {showTradeTypes && <div className="mobile-trade-types" role="group" aria-label="Trade type">
+          {TRADE_TYPES.map((type) => <button type="button" key={type.value} aria-pressed={tradeType === type.value} onClick={() => { setTradeType(type.value); setShowTradeTypes(false); }}>{type.label}</button>)}
+        </div>}
         {tradeType !== 'even-odd' && (
           <div className="mobile-prediction" role="group" aria-label="Prediction digit">
             {Array.from({ length: 10 }, (_, digit) => (
@@ -133,25 +143,26 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           </div>
         )}
         <div className="mobile-trade-inputs">
-          <label>Duration <span>Ticks</span>
+          <label><span>ticks</span>
             <input type="number" inputMode="numeric" min={durationLimits.min} max={durationLimits.max} value={duration} onChange={(event) => { const value = Number(event.target.value); if (Number.isInteger(value)) setDuration(value); }} />
           </label>
-          <label>Stake <span>USD</span>
+          <label><span>USD</span>
             <input type="number" inputMode="decimal" min="0.01" step="0.01" value={stake} onChange={(event) => setStake(event.target.value)} />
           </label>
+          <span className="mobile-stake-caption">Stake</span>
         </div>
         <div className="mobile-direction" role="group" aria-label="Contract direction">
           {modes.map((mode) => (
             <button type="button" key={mode.value} className={`${mode.direction} ${contractMode === mode.value ? 'chosen' : ''}`} aria-pressed={contractMode === mode.value} onClick={() => setContractMode(mode.value)}>
               <span>{mode.direction === 'up' ? <TrendingUp size={22} /> : <TrendingDown size={22} />}{mode.label}</span>
-              <small>{contractMode === mode.value && proposal ? `Payout ${proposal.payout.toFixed(2)} USD` : 'Select to see payout'}</small>
+              <small><span>Payout</span><strong>{contractMode === mode.value && proposal ? `${proposal.payout.toFixed(2)} USD` : '—'}</strong></small>
             </button>
           ))}
         </div>
         <button type="button" className="mobile-buy" disabled={!isConnected || !proposal || isBuying} onClick={onBuy}>
           {isBuying ? 'Purchasing…' : proposal ? `Buy ${selectedMode.label} @ ${proposal.askPrice.toFixed(2)} USD` : 'Waiting for price…'}
         </button>
-        <p className="mobile-trade-note">Select a direction, review the live payout, then buy.</p>
+        <p className="mobile-trade-note">Check the payout before placing a trade.</p>
       </section>
     </div>
   );
