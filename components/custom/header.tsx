@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { LANGUAGE_LOCALES } from '@/lib/i18n';
 import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { LanguageSwitcher } from '@/components/custom/language-switcher';
+import { Menu, X } from 'lucide-react';
+import Link from 'next/link';
 import type { AuthState, DerivAccount } from '@deriv/core';
 
 interface HeaderProps {
@@ -89,11 +91,12 @@ export function Header({
   const shouldShowName = resolveShowAppName(showAppName);
   const logoLetter = resolvedName.charAt(0).toUpperCase() || 'D';
   const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isAuthenticated = authState === 'authenticated';
   const isAuthenticating = authState === 'authenticating';
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 border-b bg-background/80 backdrop-blur-sm">
+    <header className="circletool-header fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 border-b bg-background/80 backdrop-blur-sm">
       <div className="flex items-center gap-3">
         {!logoSrc || logoError ? (
           <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
@@ -113,10 +116,14 @@ export function Header({
             {resolvedName}
           </h1>
         )}
+        <button type="button" className="mobile-menu-button sm:hidden" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>
+          {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
       </div>
       <div className="flex items-center gap-3">
-        {actions}
-        <LanguageSwitcher />
+        <Link href="/copy-trading" className="hidden sm:inline-flex text-sm font-medium hover:underline">Copy Trading</Link>
+        <div className="hidden sm:block">{actions}</div>
+        <div className="hidden sm:block"><LanguageSwitcher /></div>
         {isAuthenticated && activeAccount && (
           <Popover open={accountSwitcherOpen} onOpenChange={setAccountSwitcherOpen}>
             <PopoverTrigger asChild>
@@ -168,7 +175,7 @@ export function Header({
           </Popover>
         )}
         {isAuthenticated ? (
-          <Button variant="outline" onClick={onLogout}>
+          <Button className="hidden sm:inline-flex" variant="outline" onClick={onLogout}>
             <Localize i18n_default_text="Log out" />
           </Button>
         ) : (
@@ -188,6 +195,14 @@ export function Header({
           </div>
         )}
       </div>
+      {mobileMenuOpen && (
+        <div className="mobile-header-menu sm:hidden">
+          <Link href="/copy-trading" onClick={() => setMobileMenuOpen(false)}>Copy Trading</Link>
+          <div className="flex items-center justify-between gap-3"><span>{localize('Appearance')}</span>{actions}</div>
+          <div className="flex items-center justify-between gap-3"><span>{localize('Language')}</span><LanguageSwitcher /></div>
+          {isAuthenticated && <Button variant="outline" onClick={() => { onLogout(); setMobileMenuOpen(false); }}><Localize i18n_default_text="Log out" /></Button>}
+        </div>
+      )}
     </header>
   );
 }
