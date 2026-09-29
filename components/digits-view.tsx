@@ -14,6 +14,7 @@ import { useIsMobile } from '@/hooks/use-is-mobile';
 import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { CurrentTickDisplay } from './current-tick-display';
 import { DigitStatsBar } from './digit-stats-bar';
+import { LegacyDigitTape } from './legacy-digit-tape';
 import { TradeControls } from './trade-controls';
 import { ConfigurableDigitsControls, ConfigurableBuyButton } from './configurable-digits-controls';
 import { TradeTypeChips } from '@/components/custom/trade-type-chips';
@@ -361,6 +362,7 @@ export function DigitsView({
           /* No-code mobile layout: a single, reorderable column of blocks. */
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="mx-auto flex w-full max-w-md flex-col gap-3 px-3 py-3">
+              {!isLoading && <LegacyDigitTape tick={currentTick} lastDigit={lastDigit} />}
               {isLoading ? <Skeleton className="h-[420px] w-full rounded-xl" /> : renderConfigurable()}
             </div>
           </div>
@@ -398,7 +400,8 @@ export function DigitsView({
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_440px]">
                 <Card data-testid="market-column">
                   <CardContent className="pt-4">
-                    {renderConfigurable(MARKET_COLUMN_KEYS, false)}
+                    <LegacyDigitTape tick={currentTick} lastDigit={lastDigit} />
+                    <div className="mt-4">{renderConfigurable(MARKET_COLUMN_KEYS, false)}</div>
                   </CardContent>
                 </Card>
                 <Card data-testid="controls-column">
@@ -450,6 +453,7 @@ export function DigitsView({
                         pipSize={pipSize}
                       />
                     </div>
+                    <LegacyDigitTape tick={currentTick} lastDigit={lastDigit} />
                   </div>
 
                   <div className="border-t divide-y divide-border">
@@ -523,6 +527,7 @@ export function DigitsView({
                       pipSize={pipSize}
                     />
                   </div>
+                  <LegacyDigitTape tick={currentTick} lastDigit={lastDigit} />
                   {/* Digit stats — hidden for Even/Odd */}
                   {tradeType !== 'even-odd' && (
                     <DigitStatsBar
