@@ -137,10 +137,10 @@ export function useDigitsTrading({
   });
 
   const [tradeType, setTradeTypeRaw] =
-    useState<TradeType>('matches-differs');
+    useState<TradeType>('over-under');
 
   const [contractMode, setContractMode] =
-    useState<ContractMode>('DIGITMATCH');
+    useState<ContractMode>('DIGITOVER');
 
   const [selectedDigit, setSelectedDigit] =
     useState<number>(5);
@@ -260,89 +260,10 @@ export function useDigitsTrading({
         return;
       }
 
-      /*
-       * STEP 1
-       * Execute the original trade on the
-       * currently authenticated Deriv account.
-       */
-      const masterResult =
-        await buyWithProposal(proposal);
-
-      /*
-       * STEP 2
-       * Notify our copy-trading endpoint only
-       * after the original purchase succeeds.
-       */
-      try {
-        const needsBarrier =
-          contractMode !== 'DIGITEVEN' &&
-          contractMode !== 'DIGITODD';
-
-        const copyTradePayload = {
-          symbol:
-            activeSymbol?.underlying_symbol,
-
-          contractType:
-            contractMode,
-
-          amount:
-            parseFloat(stake),
-
-          duration,
-
-          durationUnit: 't',
-
-          ...(needsBarrier
-            ? { barrier: selectedDigit }
-            : {}),
-        };
-
-        const response = await fetch(
-          '/api/copy-trade',
-          {
-            method: 'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-
-            body: JSON.stringify(
-              copyTradePayload
-            ),
-          }
-        );
-
-        if (!response.ok) {
-          const message =
-            await response.text();
-
-          console.error(
-            'Copy trade failed:',
-            message
-          );
-        }
-      } catch (copyError) {
-        /*
-         * A copy failure must NOT turn a
-         * successful master purchase into a
-         * failed purchase.
-         */
-        console.error(
-          'Copy trade error:',
-          copyError
-        );
-      }
-
-      return masterResult;
+      return buyWithProposal(proposal);
     }, [
       proposal,
       buyWithProposal,
-      activeSymbol,
-      contractMode,
-      stake,
-      duration,
-      selectedDigit,
     ]);
 
   return {
