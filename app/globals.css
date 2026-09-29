@@ -234,3 +234,86 @@
 @media (prefers-reduced-motion: reduce) {
   .legacy-digit-rail { animation: none; }
 }
+
+/* Mobile trading terminal */
+.mobile-terminal {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #0d0e10;
+  color: #f5f6f7;
+  padding-bottom: 22px;
+}
+.mobile-terminal-nav {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: #171e28;
+  white-space: nowrap;
+}
+.mobile-terminal-nav::-webkit-scrollbar { display: none; }
+.mobile-terminal-nav button, .mobile-terminal-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 17px;
+  color: #d9e0e8;
+  font-size: 14px;
+  font-weight: 650;
+}
+.mobile-terminal-nav button.active { background: #07180e; color: white; }
+.mobile-terminal-nav svg { color: #69d1ab; }
+.mobile-terminal-nav button.active svg { color: white; }
+.mobile-market { min-height: 355px; padding: 10px 14px 18px; }
+.mobile-market-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  padding: 10px 13px;
+  border: 1px solid #24282d;
+  border-radius: 8px;
+  background: #1a1e28;
+}
+.mobile-market-selector > svg { flex: 0 0 auto; color: #69a8ac; }
+.mobile-market-name { min-width: 0; flex: 1; }
+.mobile-market-eyebrow { display: block; color: #8c989f; font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.mobile-market-name button { max-width: 100%; color: white; font-size: 16px; font-weight: 700; }
+.mobile-market-name [role="combobox"] { height: auto; min-height: 27px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.mobile-market-quote { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 5px 34px; color: #aab2b5; font-size: 13px; }
+.mobile-market-last { color: #64c5b6; }
+.mobile-digit-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); justify-items: center; gap: 18px 6px; margin: 0 auto; max-width: 530px; }
+.mobile-digit { display: grid; width: min(16vw, 69px); height: min(16vw, 69px); min-width: 48px; min-height: 48px; place-items: center; border-radius: 50%; padding: 6px; transition: transform .15s ease; }
+.mobile-digit:active { transform: scale(.95); }
+.mobile-digit > span { display: flex; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; border-radius: 50%; background: #0d0e10; line-height: 1.1; }
+.mobile-digit.selected > span { background: #29345b; }
+.mobile-digit strong { font-size: 21px; color: white; }
+.mobile-digit small { font-size: 12px; color: #aeb2b5; }
+.mobile-market-scroll { display: flex; justify-content: space-between; align-items: center; margin: 30px 3px 0; color: #62696d; font-size: 11px; }
+.mobile-trade { margin: 0 9px; padding: 10px 9px 14px; border-radius: 7px; background: #17191b; }
+.mobile-trade-handle { width: 42px; height: 4px; margin: 0 auto 12px; border-radius: 4px; background: #3d4244; }
+.mobile-trade-kicker { margin: 0 6px 2px; color: #9ea6aa; font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.mobile-trade h2 { margin: 0 6px 10px; color: white; font-size: 20px; font-weight: 700; }
+.mobile-trade-types { display: flex; gap: 5px; overflow-x: auto; padding: 3px 5px 10px; scrollbar-width: none; }
+.mobile-trade-types button { flex: 0 0 auto; border-radius: 6px; padding: 8px 10px; background: #101213; color: #aeb3b6; font-size: 12px; }
+.mobile-trade-types button[aria-pressed="true"] { background: #2b3334; color: white; }
+.mobile-prediction { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; padding: 9px; border-radius: 7px; background: #0d0e10; }
+.mobile-prediction button { height: 42px; border-radius: 5px; background: #191b1d; color: #bcc0c2; font-size: 20px; }
+.mobile-prediction button[aria-pressed="true"] { background: #383e42; color: white; font-weight: 700; }
+.mobile-trade-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.mobile-trade-inputs label { position: relative; display: flex; flex-direction: column; gap: 3px; padding: 7px 10px; border-radius: 6px; background: #0d0e10; color: #a9afb2; font-size: 11px; }
+.mobile-trade-inputs label span { position: absolute; right: 10px; bottom: 11px; color: #888e91; font-size: 12px; }
+.mobile-trade-inputs input { width: 100%; padding-right: 34px; outline: none; background: transparent; color: white; font-size: 16px; font-weight: 650; }
+.mobile-trade-inputs input:focus { box-shadow: 0 1px #5bb3ad; }
+.mobile-direction { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.mobile-direction button { overflow: hidden; border: 2px solid transparent; border-radius: 6px; color: white; text-align: left; }
+.mobile-direction button.up { background: #2d7e7a; }
+.mobile-direction button.down { background: #a53039; }
+.mobile-direction button.chosen { border-color: #e1e7e6; }
+.mobile-direction button > span { display: flex; justify-content: center; align-items: center; gap: 10px; min-height: 42px; font-size: 17px; font-weight: 700; }
+.mobile-direction button small { display: block; min-height: 35px; padding: 9px 10px; background: #0002; font-size: 11px; }
+.mobile-buy { width: 100%; min-height: 45px; margin-top: 10px; border-radius: 6px; background: #65c5b5; color: #092423; font-size: 14px; font-weight: 800; }
+.mobile-buy:disabled { cursor: not-allowed; background: #3e5d59; color: #d4dfdb; }
+.mobile-trade-note { margin: 9px 2px 0; color: #939a9d; text-align: center; font-size: 11px; }
