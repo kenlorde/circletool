@@ -2,17 +2,14 @@
 
 import { useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { Activity, BarChart3, BriefcaseBusiness, ChevronDown, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, BarChart3, BriefcaseBusiness, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
+import { AdvancedManualTrader } from './advanced-manual-trader';
+import { ManualTradeTypePicker } from './manual-trade-type-picker';
+import { isAdvancedTrade, type AdvancedTradeType } from '@/lib/manual-trades';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
 import type { ActiveSymbol, Tick, ProposalInfo, DurationLimits } from '@deriv/core';
 import type { ContractDigitResult } from '@/lib/contract-digit-result';
 import type { ContractMode, DigitStats, TradeType } from '@/lib/types';
-
-const TRADE_TYPES: { value: TradeType; label: string }[] = [
-  { value: 'matches-differs', label: 'Matches / Differs' },
-  { value: 'over-under', label: 'Over / Under' },
-  { value: 'even-odd', label: 'Even / Odd' },
-];
 
 const MODES: Record<TradeType, { value: ContractMode; label: string; direction: 'up' | 'down' }[]> = {
   'matches-differs': [
@@ -60,7 +57,8 @@ interface MobileTradingTerminalProps {
 export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   const marketRef = useRef<HTMLElement>(null);
   const tradeRef = useRef<HTMLElement>(null);
-  const [showTradeTypes, setShowTradeTypes] = useState(false);
+  const [advancedType, setAdvancedType] = useState<AdvancedTradeType | null>(null);
+  const [advancedBusy, setAdvancedBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showRisk, setShowRisk] = useState(false);
   const {
@@ -136,20 +134,13 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
 
       <section ref={tradeRef} className="mobile-trade" aria-label="Manual trading controls">
         <div className="mobile-trade-handle" aria-hidden />
-        <button type="button" className="mobile-learn" onClick={() => setShowHelp((show) => !show)} aria-expanded={showHelp}>Learn about this trade type</button>
+        <ManualTradeTypePicker value={advancedType ?? tradeType} disabled={isBuying || advancedBusy} onChange={value => {
+          if (isAdvancedTrade(value)) setAdvancedType(value);
+          else { setAdvancedType(null); setTradeType(value); }
+        }} />
+        {advancedType ? <AdvancedManualTrader key={advancedType} type={advancedType} onBusy={setAdvancedBusy} initialSymbol={activeSymbol?.underlying_symbol} /> : <>
+        <button type="button" className="mobile-learn" onClick={() => setShowHelp(show => !show)} aria-expanded={showHelp}>Learn about this trade type</button>
         {showHelp && <p className="mobile-help">{tradeType === 'over-under' ? 'Over wins when the final digit is higher than your prediction; Under wins when it is lower. An equal digit loses.' : tradeType === 'even-odd' ? 'Even wins on 0, 2, 4, 6 or 8. Odd wins on 1, 3, 5, 7 or 9.' : 'Matches wins when the final digit equals your prediction. Differs wins when it does not.'}</p>}
-        <div className="mobile-trade-title-row">
-          <button type="button" className="mobile-trade-title" onClick={() => setShowTradeTypes((show) => !show)} aria-expanded={showTradeTypes}>
-            <span className="mobile-trade-symbol"><TrendingUp size={20} /><TrendingDown size={20} /></span>
-            <span>{TRADE_TYPES.find((type) => type.value === tradeType)?.label}</span><ChevronDown size={17} />
-          </button>
-          <button type="button" className="mobile-help-orb" aria-label="Trade help" onClick={() => setShowHelp((show) => !show)}>?</button>
-        </div>
-        {showTradeTypes && <div className="mobile-trade-types" role="dialog" aria-modal="true" aria-label="Trade types">
-          <div className="mobile-types-heading"><strong>Trade types</strong><button type="button" aria-label="Close trade types" onClick={() => setShowTradeTypes(false)}>×</button></div>
-          <p>Digits</p>
-          {TRADE_TYPES.map((type) => <button type="button" key={type.value} aria-pressed={tradeType === type.value} onClick={() => { setTradeType(type.value); setShowTradeTypes(false); }}>{type.label}</button>)}
-        </div>}
         <button type="button" className="mobile-risk-button" aria-expanded={showRisk} aria-controls="mobile-risk-info" onClick={() => setShowRisk((show) => !show)}>Risk Disclaimer</button>
         {showRisk && <p id="mobile-risk-info" className="mobile-help">Trading involves risk. You can lose your entire stake on each contract. Historical digit frequencies do not predict future results. Only trade with money you can afford to lose.</p>}
         {tradeType !== 'even-odd' && (
@@ -177,7 +168,9 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           ))}
         </div>
         <p className="mobile-trade-note">{isBuying ? 'Purchasing…' : 'Tap a direction to purchase at the displayed payout.'}</p>
+        </>}
       </section>
     </div>
   );
 }
+

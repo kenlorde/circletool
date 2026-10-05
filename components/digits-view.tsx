@@ -16,6 +16,9 @@ import { CurrentTickDisplay } from './current-tick-display';
 import { DigitStatsBar } from './digit-stats-bar';
 import { LegacyDigitTape } from './legacy-digit-tape';
 import { MobileTradingTerminal } from './mobile-trading-terminal';
+import { AdvancedManualTrader } from './advanced-manual-trader';
+import { ManualTradeTypePicker } from './manual-trade-type-picker';
+import { isAdvancedTrade, type AdvancedTradeType } from '@/lib/manual-trades';
 import { TradeControls } from './trade-controls';
 import { ConfigurableDigitsControls, ConfigurableBuyButton } from './configurable-digits-controls';
 import { TradeTypeChips } from '@/components/custom/trade-type-chips';
@@ -180,6 +183,8 @@ export function DigitsView({
   onReorder,
 }: DigitsViewProps) {
   const isMobile = useIsMobile();
+  const [advancedType, setAdvancedType] = useState<AdvancedTradeType | null>(null);
+  const [advancedBusy, setAdvancedBusy] = useState(false);
   // Pinning is a mobile affordance: on desktop the controls card grows to fit,
   // so the Buy button is never scroll-clipped and a viewport-wide bar under a
   // 400px column would look detached.
@@ -338,6 +343,12 @@ export function DigitsView({
       />
     ) : null;
 
+  const manualPicker = !editMode ? <ManualTradeTypePicker value={advancedType ?? tradeType} disabled={isBuying || advancedBusy} onChange={value => {
+    if (isAdvancedTrade(value)) setAdvancedType(value);
+    else { setAdvancedType(null); setTradeType(value); }
+  }} /> : null;
+  const advancedControls = !editMode && advancedType ? <AdvancedManualTrader key={advancedType} type={advancedType} onBusy={setAdvancedBusy} initialSymbol={activeSymbol?.underlying_symbol} /> : null;
+
   return (
     <main
       className={`flex flex-col max-lg:h-dvh max-lg:overflow-y-auto lg:overflow-visible ${
@@ -424,7 +435,8 @@ export function DigitsView({
                 </Card>
                 <Card data-testid="controls-column">
                   <CardContent className="pt-4">
-                    {renderConfigurable(CONTROLS_COLUMN_KEYS)}
+                    {manualPicker}
+                    {advancedControls ?? renderConfigurable(CONTROLS_COLUMN_KEYS)}
                   </CardContent>
                 </Card>
               </div>
@@ -558,6 +570,8 @@ export function DigitsView({
               </Card>
               <Card data-testid="controls-column">
                 <CardContent className="flex flex-col gap-4 pt-4">
+                  {manualPicker}
+                  {advancedControls ?? <>
                   {/* Rendered inside the controls card, so the edge fade is
                       drawn in the card colour rather than the page background. */}
                   <TradeTypeChips
@@ -586,6 +600,7 @@ export function DigitsView({
                     onClearBuyResult={clearBuyResult}
                     isAuthenticated={authState === 'authenticated'}
                   />
+                  </>}
                 </CardContent>
               </Card>
             </div>
@@ -632,3 +647,4 @@ export function DigitsView({
     </main>
   );
 }
+
