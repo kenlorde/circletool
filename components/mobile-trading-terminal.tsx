@@ -71,7 +71,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   const selectedMode = modes.find((mode) => mode.value === contractMode) ?? modes[0];
   const cursorStyle = lastDigit === null ? undefined : {
     left: `${((lastDigit % 5) + 0.5) * 20}%`,
-    top: lastDigit < 5 ? '-14px' : 'calc(var(--digit-size) + 4px)',
+    top: lastDigit < 5 ? 'calc(var(--digit-size) + 4px)' : 'calc(var(--digit-size) * 2 + 22px)',
   } as CSSProperties;
 
   return (
@@ -95,6 +95,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
             <span className="mobile-market-subquote">{currentTick ? Number(currentTick.quote).toFixed(pipSize) : 'Waiting for ticks…'} <span>▲</span></span>
           </div>
         </div>
+        <p className="mobile-stats-caption">Last digit stats for latest {digitStats.totalTicks} ticks{activeSymbol ? ` for ${activeSymbol.underlying_symbol_name}` : ''}</p>
         <div className="mobile-digit-grid" aria-label="Last digit frequency">
           {lastDigit !== null && <span className="mobile-digit-cursor" style={cursorStyle} aria-label={`Moving cursor on digit ${lastDigit}`} />}
           {digitStats.percentages.map((pct, digit) => {
@@ -111,7 +112,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
                 aria-label={`Digit ${digit}, ${pct.toFixed(1)} percent`}
                 aria-pressed={selected}
                 className={`mobile-digit ${selected ? 'selected' : ''} ${isLatest ? 'latest' : ''}`}
-                style={{ background: `conic-gradient(${accent} ${Math.min(pct * 3.6, 360)}deg, #282b2d 0)` }}
+                style={{ background: `conic-gradient(${accent} ${Math.min(pct * 18, 360)}deg, #282b2d 0)`, '--digit-ring': `conic-gradient(${accent} ${Math.min(pct * 18, 360)}deg, #282b2d 0)` } as CSSProperties}
               >
                 <span><strong>{digit}</strong><small>{pct.toFixed(1)}%</small></span>
               </button>
@@ -124,7 +125,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
       <section ref={tradeRef} className="mobile-trade" aria-label="Manual trading controls">
         <div className="mobile-trade-handle" aria-hidden />
         <button type="button" className="mobile-learn" onClick={() => setShowHelp((show) => !show)} aria-expanded={showHelp}>Learn about this trade type</button>
-        {showHelp && <p className="mobile-help">Choose a digit, stake, and duration. Over wins when the final digit is higher than your chosen digit; Under wins when it is lower.</p>}
+        {showHelp && <p className="mobile-help">{tradeType === 'over-under' ? 'Over wins when the final digit is higher than your prediction; Under wins when it is lower. An equal digit loses.' : tradeType === 'even-odd' ? 'Even wins on 0, 2, 4, 6 or 8. Odd wins on 1, 3, 5, 7 or 9.' : 'Matches wins when the final digit equals your prediction. Differs wins when it does not.'}</p>}
         <div className="mobile-trade-title-row">
           <button type="button" className="mobile-trade-title" onClick={() => setShowTradeTypes((show) => !show)} aria-expanded={showTradeTypes}>
             <span className="mobile-trade-symbol"><TrendingUp size={20} /><TrendingDown size={20} /></span>
@@ -132,7 +133,9 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           </button>
           <button type="button" className="mobile-help-orb" aria-label="Trade help" onClick={() => setShowHelp((show) => !show)}>?</button>
         </div>
-        {showTradeTypes && <div className="mobile-trade-types" role="group" aria-label="Trade type">
+        {showTradeTypes && <div className="mobile-trade-types" role="dialog" aria-modal="true" aria-label="Trade types">
+          <div className="mobile-types-heading"><strong>Trade types</strong><button type="button" aria-label="Close trade types" onClick={() => setShowTradeTypes(false)}>×</button></div>
+          <p>Digits</p>
           {TRADE_TYPES.map((type) => <button type="button" key={type.value} aria-pressed={tradeType === type.value} onClick={() => { setTradeType(type.value); setShowTradeTypes(false); }}>{type.label}</button>)}
         </div>}
         {tradeType !== 'even-odd' && (
@@ -144,10 +147,10 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
         )}
         <div className="mobile-trade-inputs">
           <label><span>ticks</span>
-            <input type="number" inputMode="numeric" min={durationLimits.min} max={durationLimits.max} value={duration} onChange={(event) => { const value = Number(event.target.value); if (Number.isInteger(value)) setDuration(value); }} />
+            <input aria-label="Duration in ticks" type="number" inputMode="numeric" min={durationLimits.min} max={durationLimits.max} value={duration} onChange={(event) => { const value = Number(event.target.value); if (Number.isInteger(value)) setDuration(value); }} />
           </label>
           <label><span>USD</span>
-            <input type="number" inputMode="decimal" min="0.01" step="0.01" value={stake} onChange={(event) => setStake(event.target.value)} />
+            <input aria-label="Stake in USD" type="number" inputMode="decimal" min="0.01" step="0.01" value={stake} onChange={(event) => setStake(event.target.value)} />
           </label>
           <span className="mobile-stake-caption">Stake</span>
         </div>

@@ -128,9 +128,9 @@ export function Header({
           <Popover open={accountSwitcherOpen} onOpenChange={setAccountSwitcherOpen}>
             <PopoverTrigger asChild>
               <button className="flex items-center gap-2 rounded-lg border border-border px-3 hover:bg-muted/50 transition-colors">
-                <div className="text-left">
+                <div className="circletool-account-summary text-left">
                   <AccountLabel type={activeAccount.account_type} />
-                  <p className="text-base font-bold text-foreground">
+                  <p className="circletool-account-balance text-base font-bold text-foreground"><span className="sm:hidden" aria-hidden>🇺🇸 </span>
                     {formatBalance(activeAccount.balance, numberLocale)} {activeAccount.currency}
                   </p>
                 </div>
