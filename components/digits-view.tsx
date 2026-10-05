@@ -30,6 +30,7 @@ import type {
   DurationLimits,
   BuyResult,
 } from '@deriv/core';
+import type { ContractDigitResult } from '@/lib/contract-digit-result';
 import type { ContractMode, TradeType, DigitStats } from '../lib/types';
 import { ALL_CONTROL_KEYS } from '../lib/app-config';
 import type { ControlKey, DigitsAppConfig } from '../lib/app-config';
@@ -83,6 +84,7 @@ export interface DigitsViewProps {
   selectSymbol: (symbol: string) => void;
   currentTick: Tick | null;
   lastDigit: number | null;
+  contractDigitResult?: ContractDigitResult | null;
   digitStats: DigitStats;
   pipSize: number;
 
@@ -145,6 +147,7 @@ export function DigitsView({
   selectSymbol,
   currentTick,
   lastDigit,
+  contractDigitResult,
   digitStats,
   pipSize,
   tradeType,
@@ -364,7 +367,7 @@ export function DigitsView({
         isLoading ? <Skeleton className="mx-3 h-[70vh] rounded-xl" /> : (
           <MobileTradingTerminal
             symbols={symbols} activeSymbol={activeSymbol} selectSymbol={selectSymbol}
-            currentTick={currentTick} lastDigit={lastDigit} digitStats={digitStats} pipSize={pipSize}
+            currentTick={currentTick} lastDigit={lastDigit} contractDigitResult={contractDigitResult} digitStats={digitStats} pipSize={pipSize}
             tradeType={tradeType} setTradeType={setTradeType} contractMode={contractMode}
             setContractMode={setContractMode} selectedDigit={selectedDigit} setSelectedDigit={setSelectedDigit}
             stake={stake} setStake={setStake} duration={duration} setDuration={setDuration}

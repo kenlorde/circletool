@@ -7,6 +7,7 @@
  * (/edit) so the editor preview is fully live.
  */
 
+import { useContractDigitResult } from '../hooks/use-contract-digit-result';
 import { useDigitsTrading } from '../hooks/use-digits-trading';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
@@ -49,6 +50,8 @@ export function LiveDigits({
     onAuthWSFailed: logout,
   });
 
+  const contractDigitResult = useContractDigitResult(trading.buyResult, trading.openPositions, trading.pipSize, auth.wsUrl);
+
   return (
     <>
     {!editMode && authState === 'authenticated' && <ContractNotifications
@@ -73,6 +76,7 @@ export function LiveDigits({
       activeSymbol={trading.activeSymbol}
       selectSymbol={trading.selectSymbol}
       currentTick={trading.currentTick}
+      contractDigitResult={contractDigitResult}
       lastDigit={trading.lastDigit}
       digitStats={trading.digitStats}
       pipSize={trading.pipSize}

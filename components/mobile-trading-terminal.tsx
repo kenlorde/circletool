@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Activity, BarChart3, BriefcaseBusiness, ChevronDown, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
 import type { ActiveSymbol, Tick, ProposalInfo, DurationLimits } from '@deriv/core';
+import type { ContractDigitResult } from '@/lib/contract-digit-result';
 import type { ContractMode, DigitStats, TradeType } from '@/lib/types';
 
 const TRADE_TYPES: { value: TradeType; label: string }[] = [
@@ -34,6 +35,7 @@ interface MobileTradingTerminalProps {
   selectSymbol: (symbol: string) => void;
   currentTick: Tick | null;
   lastDigit: number | null;
+  contractDigitResult?: ContractDigitResult | null;
   digitStats: DigitStats;
   pipSize: number;
   tradeType: TradeType;
@@ -65,14 +67,17 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
     symbols, activeSymbol, selectSymbol, currentTick, lastDigit, digitStats, pipSize,
     tradeType, setTradeType, contractMode, setContractMode, selectedDigit, setSelectedDigit,
     stake, setStake, duration, setDuration, durationLimits, proposal, isConnected,
-    isBuying, onBuy, isAuthenticated, modeProposals,
+    isBuying, onBuy, isAuthenticated, modeProposals, contractDigitResult,
   } = props;
   const maxPct = Math.max(...digitStats.percentages);
   const minPct = Math.min(...digitStats.percentages);
   const modes = MODES[tradeType];
-  const cursorStyle = lastDigit === null ? undefined : {
-    left: `${((lastDigit % 5) + 0.5) * 20}%`,
-    top: lastDigit < 5 ? 'calc(var(--digit-size) + 4px)' : 'calc(var(--digit-size) * 2 + 22px)',
+  const result = contractDigitResult?.symbol === activeSymbol?.underlying_symbol ? contractDigitResult : null;
+  const resultClass = result ? result.profit > 0 ? 'contract-won' : result.profit < 0 ? 'contract-lost' : '' : '';
+  const cursorDigit = result?.digit ?? lastDigit;
+  const cursorStyle = cursorDigit === null ? undefined : {
+    left: `${((cursorDigit! % 5) + 0.5) * 20}%`,
+    top: cursorDigit! < 5 ? 'calc(var(--digit-size) + 4px)' : 'calc(var(--digit-size) * 2 + 22px)',
   } as CSSProperties;
 
   return (
@@ -97,11 +102,15 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           </div>
         </div>
         <p className="mobile-stats-caption">Last digit stats for latest {digitStats.totalTicks} ticks{activeSymbol ? ` for ${activeSymbol.underlying_symbol_name}` : ''}</p>
+        {result && <div className={`mobile-contract-tick ${resultClass}`} role="status">
+          Tick {result.ticks} - <strong>{result.price.slice(0, -1)}<span>{result.digit}</span></strong>
+        </div>}
         <div className="mobile-digit-grid" aria-label="Last digit frequency">
-          {lastDigit !== null && <span className="mobile-digit-cursor" style={cursorStyle} aria-label={`Moving cursor on digit ${lastDigit}`} />}
+          {cursorDigit !== null && <span className={`mobile-digit-cursor ${resultClass}`} style={cursorStyle} aria-label={`Cursor on digit ${cursorDigit}`} />}
           {digitStats.percentages.map((pct, digit) => {
             const selected = selectedDigit === digit;
             const isLatest = lastDigit === digit;
+            const isResult = result?.digit === digit;
             const highest = digitStats.totalTicks > 0 && pct === maxPct;
             const lowest = digitStats.totalTicks > 0 && pct === minPct;
             const accent = highest ? '#25aaa4' : lowest ? '#d84b55' : '#686d71';
@@ -110,9 +119,9 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
                 type="button"
                 key={digit}
                 onClick={() => setSelectedDigit(digit)}
-                aria-label={`Digit ${digit}, ${pct.toFixed(1)} percent`}
+                aria-label={`Digit ${digit}, ${pct.toFixed(1)} percent${isResult && resultClass === 'contract-won' ? ', winning contract digit' : ''}`}
                 aria-pressed={selected}
-                className={`mobile-digit ${selected ? 'selected' : ''} ${isLatest ? 'latest' : ''}`}
+                className={`mobile-digit ${selected ? 'selected' : ''} ${isLatest && !result ? 'latest' : ''} ${isResult ? resultClass : ''}`}
                 style={{ background: `conic-gradient(${accent} ${Math.min(pct * 18, 360)}deg, #282b2d 0)`, '--digit-ring': `conic-gradient(${accent} ${Math.min(pct * 18, 360)}deg, #282b2d 0)` } as CSSProperties}
               >
                 <span><strong>{digit}</strong><small>{pct.toFixed(1)}%</small></span>
