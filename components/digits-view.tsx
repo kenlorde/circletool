@@ -100,7 +100,8 @@ export interface DigitsViewProps {
   durationLimits: DurationLimits;
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
-  buyContract: () => Promise<void>;
+  modeProposals?: Partial<Record<ContractMode, ProposalInfo | null>>;
+  buyContract: (mode?: ContractMode) => Promise<void>;
   isBuying: boolean;
   buyResult: BuyResult | null;
   buyError: string | null;
@@ -159,6 +160,7 @@ export function DigitsView({
   durationLimits,
   proposal,
   isProposalLoading,
+  modeProposals,
   buyContract,
   isBuying,
   buyResult,
@@ -203,7 +205,7 @@ export function DigitsView({
   // would fail with a "Purchase Failed" toast. One gate covers every Buy
   // surface (standard, configurable, pinned). Edit mode stays inert — the
   // editor owns Buy clicks there, and its auth actions are already no-ops.
-  const handleBuy = useCallback(async () => {
+  const handleBuy = useCallback(async (mode?: ContractMode) => {
     if (editMode) return;
     // Mid-OAuth (the ?code= callback) the header already shows a login in
     // progress — don't stack a "please log in" prompt on top of it.
@@ -212,7 +214,7 @@ export function DigitsView({
       setShowLoginPrompt(true);
       return;
     }
-    await buyContract();
+    await buyContract(mode);
   }, [editMode, authState, buyContract]);
 
   // Purchase feedback for the configurable layouts lives HERE, not in
@@ -222,12 +224,12 @@ export function DigitsView({
   // these are gated on appConfig to keep a single owner per layout.
   const hasAppConfig = !!appConfig;
   useEffect(() => {
-    if (!hasAppConfig || !buyError) return;
+    if ((!hasAppConfig && !isMobile) || !buyError) return;
     toast.error(localize('Purchase Failed'), { description: buyError });
     clearBuyResult();
-  }, [hasAppConfig, buyError, clearBuyResult, localize]);
+  }, [hasAppConfig, isMobile, buyError, clearBuyResult, localize]);
   useEffect(() => {
-    if (!hasAppConfig || !buyResult) return;
+    if ((!hasAppConfig && !isMobile) || !buyResult) return;
     toast.success(localize('Contract Purchased'), {
       description: localize(
         'Buy price: {{buyPrice}} USD | Payout: {{payout}} USD | Balance: {{balance}} USD',
@@ -239,7 +241,7 @@ export function DigitsView({
       ),
     });
     clearBuyResult();
-  }, [hasAppConfig, buyResult, clearBuyResult, localize]);
+  }, [hasAppConfig, isMobile, buyResult, clearBuyResult, localize]);
 
   // In edit mode, login/sign-up/account actions are inert (no OAuth navigation
   // out of the editor) — only the theme toggle stays interactive.
@@ -366,7 +368,7 @@ export function DigitsView({
             tradeType={tradeType} setTradeType={setTradeType} contractMode={contractMode}
             setContractMode={setContractMode} selectedDigit={selectedDigit} setSelectedDigit={setSelectedDigit}
             stake={stake} setStake={setStake} duration={duration} setDuration={setDuration}
-            durationLimits={durationLimits} proposal={proposal} isConnected={isConnected}
+            durationLimits={durationLimits} proposal={proposal} modeProposals={modeProposals} isConnected={isConnected}
             isBuying={isBuying} onBuy={handleBuy} isAuthenticated={authState === 'authenticated'}
           />
         )

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useProposal, useBuy } from '@deriv/core';
 
 import type {
@@ -72,7 +72,8 @@ interface UseDigitsTradingReturn {
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
 
-  buyContract: () => Promise<void>;
+  modeProposals: Partial<Record<ContractMode, ProposalInfo | null>>;
+  buyContract: (mode?: ContractMode) => Promise<void>;
   isBuying: boolean;
   buyResult: BuyResult | null;
   buyError: string | null;
@@ -254,17 +255,28 @@ export function useDigitsTrading({
     proposalParams
   );
 
-  const buyContract =
-    useCallback(async () => {
-      if (!proposal) {
-        return;
-      }
-
-      return buyWithProposal(proposal);
-    }, [
-      proposal,
-      buyWithProposal,
-    ]);
+  const modePair: Record<TradeType, [ContractMode, ContractMode]> = {
+    'over-under': ['DIGITOVER', 'DIGITUNDER'],
+    'even-odd': ['DIGITEVEN', 'DIGITODD'],
+    'matches-differs': ['DIGITMATCH', 'DIGITDIFF'],
+  };
+  const [firstMode, secondMode] = modePair[tradeType];
+  const { proposal: firstProposal } = useProposal(tradingWs, tradingIsConnected,
+    proposalParams ? { ...proposalParams, contractType: firstMode } : null);
+  const { proposal: secondProposal } = useProposal(tradingWs, tradingIsConnected,
+    proposalParams ? { ...proposalParams, contractType: secondMode } : null);
+  const purchaseLock = useRef(false);
+  const modeProposals = { [firstMode]: firstProposal, [secondMode]: secondProposal };
+  const buyContract = useCallback(async (mode?: ContractMode) => {
+    const quote = mode === firstMode ? firstProposal : mode === secondMode ? secondProposal : mode ? null : proposal;
+    if (!quote || !tradingIsConnected || isBuying || purchaseLock.current) return;
+    purchaseLock.current = true;
+    try {
+      await buyWithProposal(quote);
+    } finally {
+      purchaseLock.current = false;
+    }
+  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal]);
 
   return {
     isConnected,
@@ -319,6 +331,8 @@ export function useDigitsTrading({
       isConnected &&
       proposalParams !== null &&
       proposal === null,
+
+    modeProposals,
 
     buyContract,
 

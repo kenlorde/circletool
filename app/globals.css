@@ -442,3 +442,7 @@
 }
 .mobile-stats-caption { text-align: center; }
 @media (prefers-reduced-motion: reduce) { .mobile-digit-cursor { transition: none; } }
+
+.mobile-risk-button { margin: 0 0 8px; padding: 9px 12px; border: 2px solid #d8a818; border-radius: 5px; background: #ffd43b; color: #342900; font-size: 14px; font-weight: 700; }
+.mobile-direction button:disabled { opacity: .5; cursor: not-allowed; }
+.mobile-direction button:focus-visible, .mobile-risk-button:focus-visible { outline: 2px solid white; outline-offset: 3px; }

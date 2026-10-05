@@ -13,7 +13,9 @@ export function useProposal(
   isConnected: boolean,
   params: ProposalParams | null
 ): UseProposalReturn {
-  const [proposal, setProposal] = useState<ProposalInfo | null>(null);
+  const [quote, setQuote] = useState<{ key: string; proposal: ProposalInfo } | null>(null);
+  const key = JSON.stringify(params);
+  const proposal = isConnected && params && quote?.key === key ? quote.proposal : null;
   const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -53,14 +55,14 @@ export function useProposal(
       if (cancelled) return;
       const resp = data as unknown as ProposalResponse;
       if (resp.proposal) {
-        setProposal({
+        setQuote({ key, proposal: {
           id: resp.proposal.id,
           askPrice: resp.proposal.ask_price,
           payout: resp.proposal.payout,
           longcode: resp.proposal.longcode,
           minStake: parseFloat(resp.proposal.validation_params?.stake?.min ?? '0'),
           maxPayout: parseFloat(resp.proposal.validation_params?.payout?.max ?? '0'),
-        });
+        } });
       }
     }).then((sub) => {
       if (cancelled) {
@@ -69,12 +71,12 @@ export function useProposal(
         unsubRef.current = sub.unsubscribe;
       }
     }).catch(() => {
-      if (!cancelled) setProposal(null);
+      if (!cancelled) setQuote(null);
     });
 
     return () => {
       cancelled = true;
-      setProposal(null);
+      setQuote(null);
       if (unsubRef.current) {
         unsubRef.current();
         unsubRef.current = null;

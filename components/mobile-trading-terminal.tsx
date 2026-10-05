@@ -50,7 +50,8 @@ interface MobileTradingTerminalProps {
   proposal: ProposalInfo | null;
   isConnected: boolean;
   isBuying: boolean;
-  onBuy: () => void;
+  modeProposals?: Partial<Record<ContractMode, ProposalInfo | null>>;
+  onBuy: (mode?: ContractMode) => void;
   isAuthenticated: boolean;
 }
 
@@ -59,16 +60,16 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   const tradeRef = useRef<HTMLElement>(null);
   const [showTradeTypes, setShowTradeTypes] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showRisk, setShowRisk] = useState(false);
   const {
     symbols, activeSymbol, selectSymbol, currentTick, lastDigit, digitStats, pipSize,
     tradeType, setTradeType, contractMode, setContractMode, selectedDigit, setSelectedDigit,
     stake, setStake, duration, setDuration, durationLimits, proposal, isConnected,
-    isBuying, onBuy, isAuthenticated,
+    isBuying, onBuy, isAuthenticated, modeProposals,
   } = props;
   const maxPct = Math.max(...digitStats.percentages);
   const minPct = Math.min(...digitStats.percentages);
   const modes = MODES[tradeType];
-  const selectedMode = modes.find((mode) => mode.value === contractMode) ?? modes[0];
   const cursorStyle = lastDigit === null ? undefined : {
     left: `${((lastDigit % 5) + 0.5) * 20}%`,
     top: lastDigit < 5 ? 'calc(var(--digit-size) + 4px)' : 'calc(var(--digit-size) * 2 + 22px)',
@@ -138,6 +139,8 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           <p>Digits</p>
           {TRADE_TYPES.map((type) => <button type="button" key={type.value} aria-pressed={tradeType === type.value} onClick={() => { setTradeType(type.value); setShowTradeTypes(false); }}>{type.label}</button>)}
         </div>}
+        <button type="button" className="mobile-risk-button" aria-expanded={showRisk} aria-controls="mobile-risk-info" onClick={() => setShowRisk((show) => !show)}>Risk Disclaimer</button>
+        {showRisk && <p id="mobile-risk-info" className="mobile-help">Trading involves risk. You can lose your entire stake on each contract. Historical digit frequencies do not predict future results. Only trade with money you can afford to lose.</p>}
         {tradeType !== 'even-odd' && (
           <div className="mobile-prediction" role="group" aria-label="Prediction digit">
             {Array.from({ length: 10 }, (_, digit) => (
@@ -156,16 +159,13 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
         </div>
         <div className="mobile-direction" role="group" aria-label="Contract direction">
           {modes.map((mode) => (
-            <button type="button" key={mode.value} className={`${mode.direction} ${contractMode === mode.value ? 'chosen' : ''}`} aria-pressed={contractMode === mode.value} onClick={() => setContractMode(mode.value)}>
+            <button type="button" key={mode.value} className={`${mode.direction} ${contractMode === mode.value ? 'chosen' : ''}`} aria-label={`Buy ${mode.label}`} disabled={!isConnected || !modeProposals?.[mode.value] || isBuying} onClick={() => { setContractMode(mode.value); onBuy(mode.value); }}>
               <span>{mode.direction === 'up' ? <TrendingUp size={22} /> : <TrendingDown size={22} />}{mode.label}</span>
-              <small><span>Payout</span><strong>{contractMode === mode.value && proposal ? `${proposal.payout.toFixed(2)} USD` : '—'}</strong></small>
+              <small><span>Payout</span><strong>{modeProposals?.[mode.value] ? `${modeProposals[mode.value]!.payout.toFixed(2)} USD` : '—'}</strong></small>
             </button>
           ))}
         </div>
-        <button type="button" className="mobile-buy" disabled={!isConnected || !proposal || isBuying} onClick={onBuy}>
-          {isBuying ? 'Purchasing…' : proposal ? `Buy ${selectedMode.label} @ ${proposal.askPrice.toFixed(2)} USD` : 'Waiting for price…'}
-        </button>
-        <p className="mobile-trade-note">Check the payout before placing a trade.</p>
+        <p className="mobile-trade-note">{isBuying ? 'Purchasing…' : 'Tap a direction to purchase at the displayed payout.'}</p>
       </section>
     </div>
   );

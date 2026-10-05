@@ -81,6 +81,7 @@ export function LiveDigits({
       duration={trading.duration}
       setDuration={trading.setDuration}
       durationLimits={trading.durationLimits}
+      modeProposals={trading.modeProposals}
       proposal={trading.proposal}
       isProposalLoading={trading.isProposalLoading}
       buyContract={trading.buyContract}
