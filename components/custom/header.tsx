@@ -121,6 +121,7 @@ export function Header({
         </button>
       </div>
       <div className="flex items-center gap-3">
+        <Link href="/smart-ai" className="hidden sm:inline-flex text-sm font-medium hover:underline">Smart AI</Link>
         <Link href="/charts" className="hidden sm:inline-flex text-sm font-medium hover:underline">Charts</Link>
         <Link href="/copy-trading" className="hidden sm:inline-flex text-sm font-medium hover:underline">Copy Trading</Link>
         <div className="hidden sm:block">{actions}</div>
@@ -198,6 +199,7 @@ export function Header({
       </div>
       {mobileMenuOpen && (
         <div className="mobile-header-menu sm:hidden">
+          <Link href="/smart-ai" onClick={() => setMobileMenuOpen(false)}>Smart AI</Link>
           <Link href="/charts" onClick={() => setMobileMenuOpen(false)}>Charts</Link>
           <Link href="/copy-trading" onClick={() => setMobileMenuOpen(false)}>Copy Trading</Link>
           <div className="flex items-center justify-between gap-3"><span>{localize('Appearance')}</span>{actions}</div>
