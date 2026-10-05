@@ -7,9 +7,9 @@ import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
 
 const actions = [
-  { title: 'Upload Bot', description: 'Import an XML bot with Deriv Bot.', emoji: '📂', color: '#ff7456', href: 'https://dbot.deriv.com', external: true },
+  { title: 'Upload Bot', description: 'Upload your XML bot into Circletool.', emoji: '📂', color: '#ff7456', href: '/bot-editor#upload', external: false },
   { title: 'Free Bots', description: 'Explore Circletool’s ready-made Under 7 bot.', emoji: '🤖', color: '#36e987', href: '/smart-ai', external: false },
-  { title: 'Bot Editor', description: 'Build a custom bot with Deriv’s visual editor.', emoji: '🧩', color: '#b68aff', href: 'https://dbot.deriv.com', external: true },
+  { title: 'Bot Editor', description: 'Edit bot fields and XML inside Circletool.', emoji: '🧩', color: '#b68aff', href: '/bot-editor', external: false },
   { title: 'Quick Strategy', description: 'Set your market, stake, and limits in Smart AI.', emoji: '⚡', color: '#ffc94a', href: '/smart-ai', external: false },
 ];
 const sections = [
@@ -68,7 +68,7 @@ export function CircletoolDashboard() {
         <span className="dashboard-referral-eyebrow">Partner referral</span><h2 id="dashboard-referral-title">Share Circletool</h2><span className="dashboard-referral-tag">Invite traders</span>
         <p>Give a friend access to Manual Trader, Smart AI, and live tick analysis through your Circletool invitation.</p>
         <button className="dashboard-more" type="button" aria-expanded={showMore} aria-controls="dashboard-referral-details" onClick={() => setShowMore(previous => !previous)}>{showMore ? 'Show less' : 'Show more'} <ArrowDown size={18} className={showMore ? 'expanded' : ''} aria-hidden /></button>
-        <div id="dashboard-referral-details" className="dashboard-referral-details" hidden={!showMore}><p>Your invitation opens Circletool’s dashboard. Your guest can use Log in or Sign up to connect their own Deriv account.</p><p>XML import and visual bot editing open Deriv Bot in a separate tab.</p></div>
+        <div id="dashboard-referral-details" className="dashboard-referral-details" hidden={!showMore}><p>Your invitation opens Circletool’s dashboard. Your guest can use Log in or Sign up to connect their own Deriv account.</p><p>Upload and edit your XML bots in Circletool’s Bot workspace.</p></div>
         <button className="dashboard-share" type="button" disabled={sharing} onClick={share}>{sharing ? 'Opening share…' : 'Invite a trader'} <Share2 size={19} aria-hidden /></button>
         {shareStatus && <p className="dashboard-share-status" role="status">{shareStatus}</p>}
       </section>
