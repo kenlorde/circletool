@@ -87,9 +87,9 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           <Monitor size={20} /> Manual Trader
         </button>
         <Link href="/copy-trading"><BriefcaseBusiness size={20} /> Copy Trading</Link>
-        <button type="button" onClick={() => marketRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Link href="/charts">
           <BarChart3 size={20} /> Charts
-        </button>
+        </Link>
         {isAuthenticated && <Link href="/reports"><BriefcaseBusiness size={20} /> Positions</Link>}
       </nav>
 
