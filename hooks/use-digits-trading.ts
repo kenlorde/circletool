@@ -206,7 +206,7 @@ export function useDigitsTrading({
 
   const proposalParams: ProposalParams | null =
     useMemo(() => {
-      if (isBuying || !activeSymbol) {
+      if (!activeSymbol) {
         return null;
       }
 
@@ -246,7 +246,6 @@ export function useDigitsTrading({
       stake,
       duration,
       selectedDigit,
-      isBuying,
     ]);
 
   const { proposal } = useProposal(
