@@ -25,11 +25,17 @@ import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { readStoredLanguage } from '@/lib/i18n';
 
 function getAuthConfig(lang?: string): AuthConfig {
+  const configuredRedirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI ??
+    (typeof window !== 'undefined' ? window.location.origin : '');
+  // Match Circletool's registered OAuth callback exactly, including casing
+  // and the absence of a trailing slash, for both authorization and exchange.
+  const redirectUri = configuredRedirectUri.replace(
+    /^https:\/\/circletool\.pro\/?$/i,
+    'https://circletool.pro'
+  );
   const config: AuthConfig = {
     clientId: process.env.NEXT_PUBLIC_DERIV_APP_ID ?? '',
-    redirectUri:
-      process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI ??
-      (typeof window !== 'undefined' ? window.location.origin : ''),
+    redirectUri,
   };
 
   // Prefer the live UI language; fall back to the namespaced storage key so
