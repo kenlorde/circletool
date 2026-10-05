@@ -116,15 +116,17 @@ export function Header({
             {resolvedName}
           </h1>
         )}
-        <button type="button" className="mobile-menu-button sm:hidden" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>
+        <button type="button" className="mobile-menu-button inline-flex items-center justify-center w-9 h-10 xl:hidden" aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>
           {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
       <div className="flex items-center gap-3">
-        <Link href="/smart-ai" className="hidden sm:inline-flex text-sm font-medium hover:underline">Smart AI</Link>
-        <Link href="/copy-trading" className="hidden sm:inline-flex text-sm font-medium hover:underline">Copy Trading</Link>
-        <Link href="/tick-analysis" className="hidden sm:inline-flex text-sm font-medium hover:underline">Tick Analysis</Link>
-        <Link href="/charts" className="hidden sm:inline-flex text-sm font-medium hover:underline">Charts</Link>
+        <Link href="/dashboard" className="hidden xl:inline-flex text-sm font-medium hover:underline">Dashboard</Link>
+        <Link href="/" className="hidden xl:inline-flex text-sm font-medium hover:underline">Manual Trader</Link>
+        <Link href="/smart-ai" className="hidden xl:inline-flex text-sm font-medium hover:underline">Smart AI</Link>
+        <Link href="/copy-trading" className="hidden xl:inline-flex text-sm font-medium hover:underline">Copy Trading</Link>
+        <Link href="/tick-analysis" className="hidden xl:inline-flex text-sm font-medium hover:underline">Tick Analysis</Link>
+        <Link href="/charts" className="hidden xl:inline-flex text-sm font-medium hover:underline">Charts</Link>
         <div className="hidden sm:block">{actions}</div>
         <div className="hidden sm:block"><LanguageSwitcher /></div>
         {isAuthenticated && activeAccount && (
@@ -199,7 +201,9 @@ export function Header({
         )}
       </div>
       {mobileMenuOpen && (
-        <div className="mobile-header-menu sm:hidden">
+        <div className="mobile-header-menu absolute top-full left-0 right-0 grid gap-3 p-4 border-b bg-background shadow-lg xl:hidden">
+          <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>Dashboard</Link>
+          <Link href="/" onClick={() => setMobileMenuOpen(false)}>Manual Trader</Link>
           <Link href="/smart-ai" onClick={() => setMobileMenuOpen(false)}>Smart AI</Link>
           <Link href="/copy-trading" onClick={() => setMobileMenuOpen(false)}>Copy Trading</Link>
           <Link href="/tick-analysis" onClick={() => setMobileMenuOpen(false)}>Tick Analysis</Link>
@@ -212,3 +216,4 @@ export function Header({
     </header>
   );
 }
+

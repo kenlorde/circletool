@@ -2,7 +2,7 @@
 
 import { useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { Activity, BarChart3, BriefcaseBusiness, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, BarChart3, BriefcaseBusiness, House, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
 import { AdvancedManualTrader } from './advanced-manual-trader';
 import { ManualTradeTypePicker } from './manual-trade-type-picker';
 import { isAdvancedTrade, type AdvancedTradeType } from '@/lib/manual-trades';
@@ -81,6 +81,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   return (
     <div className="mobile-terminal">
       <nav className="mobile-terminal-nav" aria-label="Trading sections">
+        <Link href="/dashboard"><House size={20} /> Dashboard</Link>
         <button type="button" className="active" onClick={() => tradeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}>
           <Monitor size={20} /> Manual Trader
         </button>
