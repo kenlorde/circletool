@@ -88,6 +88,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
         </button>
         <Link href="/smart-ai"><Activity size={20} /> Smart AI</Link>
         <Link href="/copy-trading"><BriefcaseBusiness size={20} /> Copy Trading</Link>
+        <Link href="/tick-analysis"><Activity size={20} /> Tick Analysis</Link>
         <Link href="/charts">
           <BarChart3 size={20} /> Charts
         </Link>
