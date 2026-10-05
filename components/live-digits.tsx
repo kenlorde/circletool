@@ -10,6 +10,7 @@
 import { useDigitsTrading } from '../hooks/use-digits-trading';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
+import { ContractNotifications } from './contract-notifications';
 import { DigitsView } from './digits-view';
 import type { DigitsAppConfig } from '../lib/app-config';
 
@@ -49,6 +50,11 @@ export function LiveDigits({
   });
 
   return (
+    <>
+    {!editMode && authState === 'authenticated' && <ContractNotifications
+      key={auth.wsUrl ?? 'public'} buyResult={trading.buyResult} positions={trading.openPositions}
+      contractMode={trading.contractMode} marketName={trading.activeSymbol?.underlying_symbol_name ?? 'selected market'}
+    />}
     <DigitsView
       authState={authState}
       accounts={accounts}
@@ -96,5 +102,6 @@ export function LiveDigits({
       rearrangeMode={rearrangeMode}
       onReorder={onReorder}
     />
+    </>
   );
 }
