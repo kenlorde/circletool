@@ -44,7 +44,7 @@ export function SmartAIBot() {
         if (total <= -loss || amount > loss + total + 0.000001) { say('Loss limit reached, or remaining allowance is below the stake. Stopped.'); break; }
         if (!ws.isConnected) throw Error('Disconnected. Stopped; no automatic restart.');
         say('Requesting Under 7 quote…');
-        const quote = await ws.send<Reply>({ proposal: 1, amount, basis: 'stake', contract_type: 'DIGITUNDER', currency, duration, duration_unit: 't', symbol, barrier: '7' });
+        const quote = await ws.send<Reply>({ proposal: 1, amount, basis: 'stake', contract_type: 'DIGITUNDER', currency, duration, duration_unit: 't', underlying_symbol: symbol, barrier: '7' });
         if (!running.current || !mounted.current) break;
         const p = quote.proposal, price = Number(p?.ask_price);
         if (!p?.id || !Number.isFinite(price) || price <= 0 || price > amount + 0.000001 || price > loss + total + 0.000001) throw Error('Invalid quote or quote exceeds the stake/loss allowance.');
