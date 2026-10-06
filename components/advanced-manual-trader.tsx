@@ -5,7 +5,7 @@ import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { ADVANCED_TYPES, buildManualProposal, type AdvancedTradeType, type ManualSettings } from '@/lib/manual-trades';
 
 interface Market { underlying_symbol: string; underlying_symbol_name: string }
-interface Contract { contract_type: string; barriers?: number; min_contract_duration?: string; max_contract_duration?: string }
+interface Contract { contract_type: string; barriers?: number; min_contract_duration?: string; max_contract_duration?: string; barrier?: string; high_barrier?: string; low_barrier?: string; multiplier_range?: number[]; growth_rate_range?: number[]; payout_choices?: number[] }
 interface Quote { id: string; ask_price: number | string; payout?: number | string; longcode: string; barrier?: string; payout_per_point?: number | string }
 interface QuoteSet { key: string; time: number; quotes: Record<string, Quote>; errors: Record<string, string> }
 const message = (error: unknown) => error instanceof Error ? error.message : 'Deriv could not complete this request.';
@@ -26,6 +26,9 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
   const [duration, setDuration] = useState('5');
   const [unit, setUnit] = useState('m');
   const [barrier, setBarrier] = useState(type === 'vanillas' ? '+0.00' : '+0.10');
+  const [barrier2, setBarrier2] = useState('-0.99');
+  const [growthRate, setGrowthRate] = useState('1');
+  const [selectedTick, setSelectedTick] = useState('1');
   const [multiplier, setMultiplier] = useState('100');
   const [payoutPerPoint, setPayoutPerPoint] = useState('1');
   const [stopLoss, setStopLoss] = useState('');
@@ -40,7 +43,7 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
   const generation = useRef(0);
   useEffect(() => { onBusy?.(busy || buying); return () => onBusy?.(false); }, [busy, buying, onBusy]);
   const currency = auth.activeAccount?.currency ?? 'USD';
-  const settings: ManualSettings = { type, symbol, currency, amount, duration, unit, barrier, multiplier, payoutPerPoint, stopLoss, takeProfit };
+  const settings: ManualSettings = { type, symbol, currency, amount, duration, unit, barrier, multiplier, payoutPerPoint, stopLoss, takeProfit, barrier2, growthRate, selectedTick };
   const key = JSON.stringify([settings, auth.activeAccountId, auth.wsUrl]);
   const currentKey = useRef(key);
   currentKey.current = key;
@@ -72,7 +75,20 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
     return () => { disposed = true; };
   }, [ws, isConnected, symbol]);
 
-  const available = (contract: string) => catalog?.symbol === symbol && catalog.contracts.some(item => item.contract_type === contract && (type !== 'higher-lower' || Number(item.barriers) === 1));
+  const available = (contract: string) => catalog?.symbol === symbol && catalog.contracts.some(item => item.contract_type === contract);
+  useEffect(() => {
+    const contracts = catalog?.contracts.filter(item => (definition.contracts as readonly string[]).includes(item.contract_type)) ?? [];
+    const preferred = contracts.find(item => item.min_contract_duration?.endsWith('m')) ?? contracts.find(item => item.min_contract_duration?.endsWith('t')) ?? contracts[0];
+    if (!preferred) return;
+    const minimum = preferred.min_contract_duration?.match(/^(\d+)([tsmhd])$/);
+    if (minimum) { setDuration(minimum[1]); setUnit(minimum[2]); }
+    if (preferred.barrier) setBarrier(preferred.barrier);
+    if (preferred.high_barrier) setBarrier(preferred.high_barrier);
+    if (preferred.low_barrier) setBarrier2(preferred.low_barrier);
+    if (preferred.multiplier_range?.length) setMultiplier(String(preferred.multiplier_range[0]));
+    if (preferred.payout_choices?.length) setPayoutPerPoint(String(preferred.payout_choices[0]));
+    if (preferred.growth_rate_range?.length) setGrowthRate(String(Math.round(preferred.growth_rate_range[0] * 100)));
+  }, [catalog, definition]);
   const validQuotes = isConnected && quoteSet?.key === key && Date.now() - quoteSet.time < 15000 && now - quoteSet.time < 15000;
   async function getQuotes() {
     if (!ws || !isConnected || busy || buying) return;
@@ -116,14 +132,16 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
     <p className="text-xs text-muted-foreground">{!isConnected ? 'Connecting to Deriv…' : !catalog ? 'Checking available contracts…' : definition.contracts.some(available) ? 'Live Deriv quotes • settings must be accepted by Deriv' : 'Unavailable on this market. Choose another market.'}</p>
     <fieldset disabled={busy || buying} className="grid grid-cols-2 gap-3">
       {fields(`Stake (${currency})`, amount, setAmount)}
-      {type === 'multipliers' ? fields('Multiplier', multiplier, setMultiplier) : <>
+      {definition.mode === 'multiplier' ? fields('Multiplier', multiplier, setMultiplier) : definition.mode === 'accumulator' ? <label className="flex flex-col gap-1 text-sm">Growth rate<select className={inputClass} value={growthRate} onChange={event => setGrowthRate(event.target.value)}>{[1,2,3,4,5].map(value => <option key={value} value={value}>{value}%</option>)}</select></label> : <>
         {fields('Duration', duration, setDuration)}
         <label className="flex flex-col gap-1 text-sm">Duration unit<select className={inputClass} value={unit} onChange={event => setUnit(event.target.value)}>{[['t', 'Ticks'], ['s', 'Seconds'], ['m', 'Minutes'], ['h', 'Hours'], ['d', 'Days']].map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-        {type === 'turbos' ? fields(`Payout per point (${currency})`, payoutPerPoint, setPayoutPerPoint) : fields(type === 'vanillas' ? 'Strike barrier / offset' : 'Barrier / offset', barrier, setBarrier, false)}
+        {definition.mode === 'turbo' ? fields(`Payout per point (${currency})`, payoutPerPoint, setPayoutPerPoint) : (definition.mode === 'barrier' || definition.mode === 'range') ? fields(type === 'vanillas' ? 'Strike barrier / offset' : definition.mode === 'range' ? 'Upper barrier / offset' : 'Barrier / offset', barrier, setBarrier, false) : null}
+        {definition.mode === 'range' && fields('Lower barrier / offset', barrier2, setBarrier2, false)}
+        {definition.mode === 'tick' && fields('Selected tick (1–5)', selectedTick, setSelectedTick)}
       </>}
-      {type === 'multipliers' && <>{fields(`Stop loss (${currency}, optional)`, stopLoss, setStopLoss)}{fields(`Take profit (${currency}, optional)`, takeProfit, setTakeProfit)}</>}
+      {(definition.mode === 'multiplier' || definition.mode === 'accumulator') && <>{definition.mode === 'multiplier' && fields(`Stop loss (${currency}, optional)`, stopLoss, setStopLoss)}{fields(`Take profit (${currency}, optional)`, takeProfit, setTakeProfit)}</>}
     </fieldset>
-    {type !== 'multipliers' && type !== 'turbos' && <p className="text-xs text-muted-foreground">Use + or − for an offset from spot (for example +0.10), or an absolute price where supported.</p>}
+    {(definition.mode === 'barrier' || definition.mode === 'range') && <p className="text-xs text-muted-foreground">Use + or − for an offset from spot (for example +0.10), or an absolute price where supported.</p>}
     {type === 'turbos' && <p className="text-xs text-muted-foreground">Deriv calculates the knockout barrier from your payout per point. Review it in the quote before buying.</p>}
     <button type="button" className="rounded-lg bg-primary p-3 font-semibold text-primary-foreground disabled:opacity-50" disabled={!isConnected || !catalog || !definition.contracts.some(available) || busy || buying} onClick={getQuotes}>{busy ? 'Requesting quotes…' : 'Get live quotes'}</button>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -131,7 +149,7 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
         const quote = quoteSet?.key === key ? quoteSet.quotes[contract] : null;
         return <div className="flex flex-col gap-2 rounded-lg border border-border p-3" key={contract}>
           <strong>{definition.directions[index]}</strong>
-          {quote ? <><p className="text-sm">Price: {Number(quote.ask_price).toFixed(2)} {currency}</p>{type === 'higher-lower' || type === 'touch-no-touch' ? <p className="text-sm">Payout: {Number(quote.payout ?? 0).toFixed(2)} {currency}</p> : null}{quote.barrier && <p className="text-sm">Barrier: {quote.barrier}</p>}{quote.payout_per_point != null && <p className="text-sm">Per point: {quote.payout_per_point} {currency}</p>}<p className="text-xs text-muted-foreground">{quote.longcode}</p></> : <p className="text-xs text-muted-foreground">{!available(contract) ? 'Unavailable for this market' : quoteSet?.key === key ? quoteSet.errors[contract] : 'Request a quote to view price and contract terms.'}</p>}
+          {quote ? <><p className="text-sm">Price: {Number(quote.ask_price).toFixed(2)} {currency}</p>{definition.mode !== 'multiplier' && definition.mode !== 'accumulator' && definition.mode !== 'turbo' && type !== 'vanillas' ? <p className="text-sm">Payout: {Number(quote.payout ?? 0).toFixed(2)} {currency}</p> : null}{quote.barrier && <p className="text-sm">Barrier: {quote.barrier}</p>}{quote.payout_per_point != null && <p className="text-sm">Per point: {quote.payout_per_point} {currency}</p>}<p className="text-xs text-muted-foreground">{quote.longcode}</p></> : <p className="text-xs text-muted-foreground">{!available(contract) ? 'Unavailable for this market' : quoteSet?.key === key ? quoteSet.errors[contract] : 'Request a quote to view price and contract terms.'}</p>}
           <button type="button" className="mt-auto rounded-lg border border-border bg-secondary p-3 font-semibold disabled:opacity-50" disabled={!quote || !validQuotes || busy || buying} onClick={() => buy(contract)}>{buying ? 'Purchasing…' : auth.authState === 'authenticated' ? `Buy ${definition.directions[index]}` : 'Log in to buy'}</button>
         </div>;
       })}
