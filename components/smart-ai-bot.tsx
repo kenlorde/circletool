@@ -1,13 +1,13 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useBaseTrading } from '@/hooks/use-base-trading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 const TYPES = ['DIGITUNDER'];
 type Reply = { proposal?: { id: string; ask_price: number | string }; buy?: { contract_id: number }; proposal_open_contract?: { is_sold: number; profit: number | string }; portfolio?: { contracts: unknown[] } };
-export function SmartAIBot() {
+export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = false, onRunStateChange }: { barrier?: '7' | '8'; sessionLock: RefObject<boolean>; anotherBotRunning?: boolean; onRunStateChange: (running: boolean) => void }) {
+  const botName = barrier === '8' ? 'Expert AI' : 'Master AI';
   const { ws, isConnected, auth, balanceSync } = useDerivWSContext();
   const market = useBaseTrading({ ws, isConnected, isAuthenticated: !!auth.wsUrl, contractTypes: TYPES });
   const [stake, setStake] = useState('0.35'), [ticks, setTicks] = useState('1'), [target, setTarget] = useState('2'), [limit, setLimit] = useState('2');
@@ -16,14 +16,15 @@ export function SmartAIBot() {
   const accountId = auth.activeAccount?.account_id;
   const currency = auth.activeAccount?.currency ?? 'USD';
   useEffect(() => { mounted.current = true; const hide = () => { if (document.hidden) running.current = false; }; document.addEventListener('visibilitychange', hide); return () => { mounted.current = false; running.current = false; document.removeEventListener('visibilitychange', hide); }; }, []);
-  useEffect(() => { running.current = false; }, [ws, isConnected, accountId]);
+  useEffect(() => { running.current = false; }, [ws, isConnected, accountId, barrier]);
   const stop = () => { running.current = false; setMessage('Stopping. A sent purchase or open contract will finish; no next trade.'); };
   async function start() {
-    if (lock.current || !ws || !isConnected || auth.authState !== 'authenticated' || !accountId || !market.activeSymbol) return;
+    if (lock.current || sessionLock.current || anotherBotRunning || !ws || !isConnected || auth.authState !== 'authenticated' || !accountId || !market.activeSymbol) return;
     const amount = Number(stake), duration = Number(ticks), goal = Number(target), loss = Number(limit);
     if (![amount, duration, goal, loss].every(n => Number.isFinite(n) && n > 0) || !Number.isInteger(duration) || amount > loss) { setMessage('Enter positive settings. Ticks must be a whole number and stake must fit the loss limit.'); return; }
+    // Shared with both bots so switching pages cannot bypass a pending purchase.
     const key = 'circletool-under7-pending:' + accountId;
-    lock.current = true; setBusy(true); running.current = true;
+    lock.current = true; sessionLock.current = true; onRunStateChange(true); setBusy(true); running.current = true;
     const say = (s: string) => { if (mounted.current) setMessage(s); };
     let total = 0, count = 0;
     try {
@@ -44,13 +45,13 @@ export function SmartAIBot() {
         if (total >= goal) { say('Profit target reached. Stopped.'); break; }
         if (total <= -loss || amount > loss + total + 0.000001) { say('Loss limit reached, or remaining allowance is below the stake. Stopped.'); break; }
         if (!ws.isConnected) throw Error('Disconnected. Stopped; no automatic restart.');
-        say('Requesting Under 7 quote…');
-        const quote = await ws.send<Reply>({ proposal: 1, amount, basis: 'stake', contract_type: 'DIGITUNDER', currency, duration, duration_unit: 't', underlying_symbol: symbol, barrier: '7' });
+        say('Requesting Under '+barrier+' quote…');
+        const quote = await ws.send<Reply>({ proposal: 1, amount, basis: 'stake', contract_type: 'DIGITUNDER', currency, duration, duration_unit: 't', underlying_symbol: symbol, barrier });
         if (!running.current || !mounted.current) break;
         const p = quote.proposal, price = Number(p?.ask_price);
         if (!p?.id || !Number.isFinite(price) || price <= 0 || price > amount + 0.000001 || price > loss + total + 0.000001) throw Error('Invalid quote or quote exceeds the stake/loss allowance.');
         localStorage.setItem(key, 'unknown');
-        say('Purchasing Under 7…');
+        say('Purchasing Under '+barrier+'…');
         const purchase = await ws.send<Reply>({ buy: p.id, price: String(price) });
         const id = purchase.buy?.contract_id;
         if (!id) throw Error('Purchase confirmation missing. Stopped; check account transactions.');
@@ -79,19 +80,19 @@ export function SmartAIBot() {
       }
       if (!running.current) say('Stopped. No further purchases.');
     } catch (e) { say(e instanceof Error ? e.message : 'Bot stopped after an error.'); }
-    finally { running.current = false; lock.current = false; if (mounted.current) setBusy(false); }
+    finally { running.current = false; lock.current = false; sessionLock.current = false; onRunStateChange(false); if (mounted.current) setBusy(false); }
   }
-  return <main className="mx-auto max-w-2xl space-y-5 px-4 py-6">
-    <nav className="flex flex-wrap gap-4 text-sm"><Link href="/">Manual Trader</Link><span className="font-bold text-emerald-500">Smart AI</span><Link href="/copy-trading">Copy Trading</Link><Link href="/charts">Charts</Link></nav>
-    <h1 className="text-2xl font-bold">Smart AI · Under 7 bot</h1>
-    <p className="text-muted-foreground">Digit Under 7 wins on 0–6 and loses on 7–9. Fixed stake, one contract at a time. This bot follows rules; it does not predict digits.</p>
+  return <section className="space-y-5 rounded-2xl border p-4 sm:p-6" aria-label={botName}>
+    <h2 className="text-2xl font-bold">{botName} · Under {barrier} bot</h2>
+    <p className="text-muted-foreground">Digit Under {barrier} wins on {barrier === '8' ? '0–7' : '0–6'} and loses on {barrier === '8' ? '8–9' : '7–9'}. Fixed stake, one contract at a time. This bot follows rules; it does not predict digits.</p>
     <div className="rounded-xl border p-5 space-y-4">
       <label className="block">Volatility index<select className="mt-2 block w-full rounded-md border bg-background p-3" value={market.activeSymbol?.underlying_symbol ?? ''} disabled={busy} onChange={e => market.selectSymbol(e.target.value)}><option value="" disabled>Select a market</option>{market.symbols.filter(s => /volatility/i.test(s.underlying_symbol_name)).map(s => <option key={s.underlying_symbol} value={s.underlying_symbol}>{s.underlying_symbol_name}</option>)}</select></label>
       <div className="grid grid-cols-2 gap-4">{[{label:'Stake ('+currency+')',value:stake,set:setStake},{label:'Duration (ticks)',value:ticks,set:setTicks},{label:'Profit target ('+currency+')',value:target,set:setTarget},{label:'Loss limit ('+currency+')',value:limit,set:setLimit}].map(f => <label key={f.label}>{f.label}<Input className="mt-2" type="number" min="0" step={f.label.includes('ticks')?'1':'0.01'} value={f.value} disabled={busy} onChange={e => f.set(e.target.value)} /></label>)}</div>
       <p className="text-sm">Account: {auth.activeAccount ? auth.activeAccount.account_type+' · '+accountId : 'Not logged in'}. Settings lock while running.</p>
-      <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={busy || !isConnected || !market.activeSymbol}>Start bot</Button>}<Button variant="destructive" onClick={stop} disabled={!busy}>Stop</Button></div>
+      <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={busy || anotherBotRunning || !isConnected || !market.activeSymbol}>Start bot</Button>}<Button variant="destructive" onClick={stop} disabled={!busy}>Stop</Button></div>
     </div>
     <div className="rounded-xl border p-5" aria-live="polite"><p>{message}</p><div className="mt-4 flex gap-8"><span>Trades: <b>{trades}</b></span><span>Net profit: <b>{profit.toFixed(2)} {currency}</b></span></div><p className="mt-3 text-sm">Options account balance: {auth.activeAccount?.balance ?? '—'} {currency}</p>{balanceSync.error && <p className="mt-2 text-sm text-amber-500" role="status">{balanceSync.error}</p>}<Button className="mt-3" variant="outline" onClick={() => void balanceSync.refresh()} disabled={!isConnected || !auth.wsUrl}>Refresh balance</Button></div>
+    {anotherBotRunning && <p role="status" className="text-sm text-amber-500">The other bot is running. Stop it before starting {botName}.</p>}
     <p className="text-sm text-muted-foreground">Keep this page open. Leaving the page or backgrounding your iPhone stops new purchases. Stop cannot cancel an order already sent. Trading can lose money; targets do not guarantee profit.</p>
-  </main>;
+  </section>;
 }

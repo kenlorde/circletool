@@ -1,2 +1,2 @@
-import { SmartAIBot } from '@/components/smart-ai-bot';
-export default function SmartAIPage() { return <SmartAIBot />; }
+import { AIBotsPage } from '@/components/ai-bots-page';
+export default function MasterAIPage() { return <AIBotsPage />; }
