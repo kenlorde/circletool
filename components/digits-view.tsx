@@ -347,7 +347,7 @@ export function DigitsView({
     if (isAdvancedTrade(value)) setAdvancedType(value);
     else { setAdvancedType(null); setTradeType(value); }
   }} /> : null;
-  const advancedControls = !editMode && advancedType ? <AdvancedManualTrader key={advancedType} type={advancedType} onBusy={setAdvancedBusy} initialSymbol={activeSymbol?.underlying_symbol} /> : null;
+  const advancedControls = !editMode && advancedType ? <AdvancedManualTrader key={advancedType} type={advancedType} onBusy={setAdvancedBusy} onSymbolChange={selectSymbol} initialSymbol={activeSymbol?.underlying_symbol} /> : null;
 
   return (
     <main

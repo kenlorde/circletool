@@ -14,9 +14,19 @@ async function withTimeout<T>(request: Promise<T>): Promise<T> {
   try { return await Promise.race([request, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error('Deriv request timed out.')), 20000); })]); }
   finally { clearTimeout(timer); }
 }
+const requestCache = new WeakMap<object, Map<string, { time: number; promise: Promise<unknown> }>>();
+function cachedRequest<T>(connection: object, key: string, request: () => Promise<T>): Promise<T> {
+  let entries = requestCache.get(connection);
+  if (!entries) { entries = new Map(); requestCache.set(connection, entries); }
+  const cached = entries.get(key);
+  if (cached && Date.now() - cached.time < 300000) return cached.promise as Promise<T>;
+  const promise = request().catch(error => { entries!.delete(key); throw error; });
+  entries.set(key, { time: Date.now(), promise });
+  return promise;
+}
 const inputClass = 'w-full rounded-lg border border-border bg-background p-3 text-foreground';
 
-export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: AdvancedTradeType; initialSymbol?: string; onBusy?: (busy: boolean) => void }) {
+export function AdvancedManualTrader({ type, initialSymbol, onBusy, onSymbolChange }: { type: AdvancedTradeType; initialSymbol?: string; onSymbolChange?: (symbol: string) => void; onBusy?: (busy: boolean) => void }) {
   const { ws, isConnected, auth } = useDerivWSContext();
   const definition = ADVANCED_TYPES.find(item => item.value === type)!;
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -40,6 +50,7 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
   const [receipt, setReceipt] = useState('');
   const [now, setNow] = useState(0);
   const buyLock = useRef(false);
+  const quoteLock = useRef(false);
   const generation = useRef(0);
   useEffect(() => { onBusy?.(busy || buying); return () => onBusy?.(false); }, [busy, buying, onBusy]);
   const currency = auth.activeAccount?.currency ?? 'USD';
@@ -48,6 +59,7 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
   const currentKey = useRef(key);
   currentKey.current = key;
 
+  useEffect(() => { if (initialSymbol) setSymbol(initialSymbol); }, [initialSymbol]);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -57,7 +69,7 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
     setQuoteSet(null); setCatalog(null);
     if (!ws || !isConnected) return;
     let disposed = false;
-    withTimeout(ws.send<{ active_symbols?: Market[] }>({ active_symbols: 'full' })).then(response => {
+    cachedRequest(ws, 'markets', () => withTimeout(ws.send<{ active_symbols?: Market[] }>({ active_symbols: 'full' }))).then(response => {
       if (disposed) return;
       const values = response.active_symbols ?? [];
       setMarkets(values);
@@ -69,7 +81,7 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
     setCatalog(null); setQuoteSet(null); setError('');
     if (!ws || !isConnected || !symbol) return;
     let disposed = false;
-    withTimeout(ws.send<{ contracts_for?: { available?: Contract[] } }>({ contracts_for: symbol })).then(response => {
+    cachedRequest(ws, 'contracts:' + symbol, () => withTimeout(ws.send<{ contracts_for?: { available?: Contract[] } }>({ contracts_for: symbol }))).then(response => {
       if (!disposed) setCatalog({ symbol, contracts: response.contracts_for?.available ?? [] });
     }).catch(err => { if (!disposed) setError(message(err)); });
     return () => { disposed = true; };
@@ -91,7 +103,8 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
   }, [catalog, definition]);
   const validQuotes = isConnected && quoteSet?.key === key && Date.now() - quoteSet.time < 15000 && now - quoteSet.time < 15000;
   async function getQuotes() {
-    if (!ws || !isConnected || busy || buying) return;
+    if (!ws || !isConnected || busy || buying || quoteLock.current || buyLock.current) return;
+    quoteLock.current = true;
     const requestKey = key;
     const requestGeneration = generation.current;
     setBusy(true); setError(''); setQuoteSet(null); setReceipt('');
@@ -110,8 +123,16 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
       for (const result of results) { if (result.quote) quotes[result.contract] = result.quote; else errors[result.contract] = result.error; }
       setQuoteSet({ key: requestKey, time: Date.now(), quotes, errors }); setNow(Date.now());
     } catch (err) { if (currentKey.current === requestKey && generation.current === requestGeneration) setError(message(err)); }
-    finally { setBusy(false); }
+    finally { quoteLock.current = false; setBusy(false); }
   }
+  useEffect(() => {
+    if (!ws || !isConnected || catalog?.symbol !== symbol || !definition.contracts.some(available)) return;
+    const initial = setTimeout(() => { void getQuotes(); }, 700);
+    const refresh = setInterval(() => { if (!buyLock.current) void getQuotes(); }, 10000);
+    return () => { clearTimeout(initial); clearInterval(refresh); };
+  // The serialized key includes every proposal field and the active account.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, catalog, isConnected, ws]);
   async function buy(contract: string) {
     if (buyLock.current || !ws || !isConnected || !validQuotes || !quoteSet || quoteSet.key !== currentKey.current) return;
     if (auth.authState !== 'authenticated') { await auth.login(); return; }
@@ -128,8 +149,8 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy }: { type: Ad
   const fields = (label: string, value: string, change: (value: string) => void, numeric = true) => <label className="flex flex-col gap-1 text-sm">{label}<input className={inputClass} disabled={busy || buying} value={value} type={numeric ? 'number' : 'text'} step={numeric ? 'any' : undefined} onChange={event => change(event.target.value)} /></label>;
 
   return <div className="flex flex-col gap-4 py-4">
-    <label className="flex flex-col gap-1 text-sm">Market<select className={inputClass} value={symbol} disabled={busy || buying || !isConnected} onChange={event => setSymbol(event.target.value)}>{markets.map(market => <option value={market.underlying_symbol} key={market.underlying_symbol}>{market.underlying_symbol_name}</option>)}</select></label>
-    <p className="text-xs text-muted-foreground">{!isConnected ? 'Connecting to Deriv…' : !catalog ? 'Checking available contracts…' : definition.contracts.some(available) ? 'Live Deriv quotes • settings must be accepted by Deriv' : 'Unavailable on this market. Choose another market.'}</p>
+    <label className="flex flex-col gap-1 text-sm">Market<select className={inputClass} value={symbol} disabled={busy || buying || !isConnected} onChange={event => { setSymbol(event.target.value); onSymbolChange?.(event.target.value); }}>{markets.map(market => <option value={market.underlying_symbol} key={market.underlying_symbol}>{market.underlying_symbol_name}</option>)}</select></label>
+    <p className="text-xs text-muted-foreground">{!isConnected ? 'Connecting to Deriv…' : !catalog ? 'Checking available contracts…' : definition.contracts.some(available) ? 'Live quotes update automatically. Review the terms before buying.' : 'Unavailable on this market. Choose another market.'}</p>
     <fieldset disabled={busy || buying} className="grid grid-cols-2 gap-3">
       {fields(`Stake (${currency})`, amount, setAmount)}
       {definition.mode === 'multiplier' ? fields('Multiplier', multiplier, setMultiplier) : definition.mode === 'accumulator' ? <label className="flex flex-col gap-1 text-sm">Growth rate<select className={inputClass} value={growthRate} onChange={event => setGrowthRate(event.target.value)}>{[1,2,3,4,5].map(value => <option key={value} value={value}>{value}%</option>)}</select></label> : <>

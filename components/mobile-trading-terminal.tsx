@@ -138,7 +138,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           if (isAdvancedTrade(value)) setAdvancedType(value);
           else { setAdvancedType(null); setTradeType(value); }
         }} />
-        {advancedType ? <AdvancedManualTrader key={advancedType} type={advancedType} onBusy={setAdvancedBusy} initialSymbol={activeSymbol?.underlying_symbol} /> : <>
+        {advancedType ? <AdvancedManualTrader key={advancedType} type={advancedType} onBusy={setAdvancedBusy} onSymbolChange={selectSymbol} initialSymbol={activeSymbol?.underlying_symbol} /> : <>
         <button type="button" className="mobile-learn" onClick={() => setShowHelp(show => !show)} aria-expanded={showHelp}>Learn about this trade type</button>
         {showHelp && <p className="mobile-help">{tradeType === 'over-under' ? 'Over wins when the final digit is higher than your prediction; Under wins when it is lower. An equal digit loses.' : tradeType === 'even-odd' ? 'Even wins on 0, 2, 4, 6 or 8. Odd wins on 1, 3, 5, 7 or 9.' : 'Matches wins when the final digit equals your prediction. Differs wins when it does not.'}</p>}
         {tradeType !== 'even-odd' && (
