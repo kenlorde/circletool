@@ -1,18 +1,21 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Download, FileCode2, FolderOpen, Save, Upload, Undo2, Redo2, ZoomIn, ZoomOut, LayoutDashboard, Bot, Play } from 'lucide-react';
+import { Download, FileCode2, FolderOpen, Save, Upload, Undo2, Redo2, ZoomIn, ZoomOut, LayoutDashboard, Bot, Play, Square } from 'lucide-react';
 import { Header } from '@/components/custom/header';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
 import { MAX_BOT_BYTES, botBlocks, botFilename, parseBotXml, setBotBlockDisabled, updateBotField } from '@/lib/bot-xml';
+
+import { compileBotXml, runBotSession, QUICK_DIGIT_BOT } from '@/lib/bot-runtime';
+import type { BotProgress } from '@/lib/bot-runtime';
 
 interface SavedBot { id: string; name: string; xml: string; updatedAt: string }
 const STORAGE_KEY = 'circletool.bot-library.v1';
 const control = 'rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground';
 const button = `${control} inline-flex items-center justify-center gap-2 disabled:opacity-40`;
 export function BotWorkspace() {
-  const { auth } = useDerivWSContext();
+  const { auth, ws, isConnected } = useDerivWSContext();
   const logoSrc = useLogoSrc();
   const inputRef = useRef<HTMLInputElement>(null);
   const [xml, setXml] = useState('');
@@ -24,18 +27,61 @@ export function BotWorkspace() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<BotProgress>({ message: 'Bot is not running', trades: 0, profit: 0 });
+  const [maxTrades, setMaxTrades] = useState('10');
+  const [maxStake, setMaxStake] = useState('1');
+  const [lossLimit, setLossLimit] = useState('5');
+  const session = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
+  const accountRef = useRef({ ws, id: auth.activeAccountId, authenticated: !!auth.wsUrl, isConnected });
+  accountRef.current = { ws, id: auth.activeAccountId, authenticated: !!auth.wsUrl, isConnected };
+  useEffect(() => {
+    mounted.current = true;
+    const hide = () => { if (document.hidden) session.current?.abort(); };
+    document.addEventListener('visibilitychange', hide);
+    return () => { mounted.current = false; session.current?.abort(); document.removeEventListener('visibilitychange', hide); };
+  }, []);
+  useEffect(() => { session.current?.abort(); }, [ws, auth.activeAccountId, auth.wsUrl, isConnected]);
+  async function run() {
+    if (session.current || busy) return;
+    try {
+      if (!ws || !isConnected || !auth.wsUrl || !auth.activeAccountId || !auth.activeAccount?.currency) throw new Error('Connect a Deriv account before running a bot.');
+      const program = compileBotXml(xml);
+      const limits = { maxTrades: Number(maxTrades), maxStake: Number(maxStake), lossLimit: Number(lossLimit) };
+      const accountId = auth.activeAccountId;
+      const controller = new AbortController(); session.current = controller; setRunning(true);
+      setStatus('');
+      await runBotSession({
+        program, ws, currency: auth.activeAccount.currency, limits, signal: controller.signal,
+        isAccountCurrent: () => accountRef.current.ws === ws && accountRef.current.id === accountId && accountRef.current.authenticated && accountRef.current.isConnected && ws.isConnected,
+        onProgress: next => { if (mounted.current) setProgress(next); },
+      });
+    } catch (error) {
+      if (mounted.current) {
+        const message = error instanceof Error ? error.message : 'Bot stopped.';
+        setStatus(message); setProgress(previous => ({ ...previous, message }));
+      }
+    } finally { session.current = null; if (mounted.current) setRunning(false); }
+  }
+  function quickStrategy() {
+    if (session.current || busy || !canReplace()) return;
+    resetHistory(); setXml(QUICK_DIGIT_BOT); setName('Circletool digit starter.xml'); setId(null); setSavedSnapshot(''); setTab('fields'); setSearch('');
+    setStatus('Starter loaded: Under 7, 1 tick, stake 1. Review the settings and session limits before Run.');
+  }
   const [zoom, setZoom] = useState(1);
   const [showLibrary, setShowLibrary] = useState(false);
   const undoStack = useRef<string[]>([]);
   const redoStack = useRef<string[]>([]);
   const [historyVersion, setHistoryVersion] = useState(0);
   function editXml(next: string) {
-    if (next === xml) return;
+    if (session.current || next === xml) return;
     undoStack.current = [...undoStack.current.slice(-49), xml];
     redoStack.current = [];
     setXml(next); setHistoryVersion(value => value + 1);
   }
   function history(direction: 'undo' | 'redo') {
+    if (session.current) return;
     const from = direction === 'undo' ? undoStack.current : redoStack.current;
     const to = direction === 'undo' ? redoStack.current : undoStack.current;
     const next = from.pop();
@@ -81,9 +127,9 @@ export function BotWorkspace() {
     document.addEventListener('click', guardLink, true);
     return () => { window.removeEventListener('beforeunload', warn); document.removeEventListener('click', guardLink, true); };
   }, [dirty]);
-  const canReplace = () => !dirty || window.confirm('This bot has unsaved changes. Replace it? Download or save it first if you want to keep them.');
+  const canReplace = () => !session.current && (!dirty || window.confirm('This bot has unsaved changes. Replace it? Download or save it first if you want to keep them.'));
   async function upload(file: File | undefined) {
-    if (!file || busy || !canReplace()) return;
+    if (!file || session.current || busy || !canReplace()) return;
     setBusy(true); setStatus('');
     try {
       if (!/\.xml$/i.test(file.name)) throw new Error('Choose a bot file ending in .xml.');
@@ -91,7 +137,7 @@ export function BotWorkspace() {
       const source = await file.text();
       parseBotXml(source);
       resetHistory(); setXml(source); setName(botFilename(file.name)); setId(null); setSavedSnapshot(''); setTab('fields'); setSearch('');
-      setStatus('Bot uploaded. Edit its fields or XML, then save or download your changes.');
+      setStatus('Bot uploaded. Review its fields and session limits, then Check bot before Run.');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not upload this bot.'); }
     finally { setBusy(false); if (inputRef.current) inputRef.current.value = ''; }
   }
@@ -128,9 +174,9 @@ export function BotWorkspace() {
     <nav className="builder-nav" aria-label="Bot sections"><Link href="/dashboard"><LayoutDashboard size={20} />Dashboard</Link><span aria-current="page"><Bot size={20} />Bot Builder</span><Link href="/smart-ai">Free Bots</Link><Link href="/academy">Academy</Link></nav>
     <div className="mx-auto w-full px-3 py-4 pb-32">
       <Link href="/dashboard" className="text-sm underline">← Dashboard</Link>
-      <div className="my-5 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">Bot Builder</h1><p className="mt-2 text-sm text-muted-foreground">Upload, edit, and download your XML bots inside Circletool.</p></div><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{dirty ? 'Unsaved changes' : xml ? 'Saved' : 'XML editor'}</span></div>
+      <div className="my-5 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">Bot Builder</h1><p className="mt-2 text-sm text-muted-foreground">Upload, edit, and run supported digit XML bots inside Circletool.</p></div><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{dirty ? 'Unsaved changes' : xml ? 'Saved' : 'XML editor'}</span></div>
       <section id="upload" className="mb-5 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-5" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); upload(event.dataTransfer.files[0]); }} aria-label="Upload XML bot">
-        <div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><FolderOpen className="text-primary" size={30} aria-hidden /><div><h2 className="font-semibold">Upload your bot</h2><p className="text-sm text-muted-foreground">Choose an XML file from Files, or drag it here. Up to 2 MB.</p></div></div><button className={button} type="button" disabled={busy} onClick={() => inputRef.current?.click()}><Upload size={17} aria-hidden />{busy ? 'Reading…' : 'Choose XML file'}</button></div>
+        <div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><FolderOpen className="text-primary" size={30} aria-hidden /><div><h2 className="font-semibold">Upload your bot</h2><p className="text-sm text-muted-foreground">Choose an XML file from Files, or drag it here. Up to 2 MB.</p></div></div><button className={button} type="button" disabled={busy || running} onClick={() => inputRef.current?.click()}><Upload size={17} aria-hidden />{busy ? 'Reading…' : 'Choose XML file'}</button><button className={button} type="button" disabled={busy || running} onClick={quickStrategy}>Quick strategy</button></div>
         <input ref={inputRef} type="file" accept=".xml,application/xml,text/xml" className="sr-only" aria-label="Choose XML bot file" onChange={event => upload(event.target.files?.[0])} />
       </section>
       {status && <p role="status" className="mb-4 rounded-lg border border-border p-3 text-sm">{status}</p>}
@@ -138,8 +184,8 @@ export function BotWorkspace() {
         <aside className="builder-tools" aria-label="Workspace tools">
           <button type="button" title="Upload XML" aria-label="Upload XML" onClick={() => inputRef.current?.click()}><FolderOpen size={23} /></button>
           <button type="button" title="My saved bots" aria-label="Show saved bots" aria-pressed={showLibrary} onClick={() => setShowLibrary(value => !value)}><Save size={23} /></button>
-          <button type="button" title="Undo" aria-label="Undo edit" disabled={!undoStack.current.length} onClick={() => history('undo')}><Undo2 size={23} /></button>
-          <button type="button" title="Redo" aria-label="Redo edit" disabled={!redoStack.current.length} onClick={() => history('redo')}><Redo2 size={23} /></button>
+          <button type="button" title="Undo" aria-label="Undo edit" disabled={running || !undoStack.current.length} onClick={() => history('undo')}><Undo2 size={23} /></button>
+          <button type="button" title="Redo" aria-label="Redo edit" disabled={running || !redoStack.current.length} onClick={() => history('redo')}><Redo2 size={23} /></button>
           <button type="button" title="Zoom in" aria-label="Zoom in" disabled={zoom >= 1.5} onClick={() => setZoom(value => Math.min(1.5, value + .1))}><ZoomIn size={23} /></button>
           <button type="button" title="Zoom out" aria-label="Zoom out" disabled={zoom <= .6} onClick={() => setZoom(value => Math.max(.6, value - .1))}><ZoomOut size={23} /></button>
         </aside>
@@ -149,15 +195,15 @@ export function BotWorkspace() {
           <div className="flex flex-wrap items-end gap-3"><label className="min-w-0 flex-1 text-sm">Bot filename<input className={`${control} mt-1 w-full`} maxLength={110} value={name} onChange={event => setName(event.target.value)} /></label><button type="button" className={button} disabled={!analysis.valid || busy} onClick={save}><Save size={16} aria-hidden />Save on device</button><button type="button" className={button} disabled={!analysis.valid || busy} onClick={download}><Download size={16} aria-hidden />Download XML</button></div>
           <div className="my-4 flex flex-wrap gap-2" role="group" aria-label="Editor view"><button type="button" className={`${button} ${tab === 'fields' ? 'border-primary bg-primary/10' : ''}`} aria-pressed={tab === 'fields'} onClick={() => setTab('fields')}>Block editor</button><button type="button" className={`${button} ${tab === 'source' ? 'border-primary bg-primary/10' : ''}`} aria-pressed={tab === 'source'} onClick={() => setTab('source')}><FileCode2 size={16} aria-hidden />XML source</button></div>
           {analysis.error && <p role="alert" className="mb-4 text-sm text-destructive">{analysis.error}</p>}
-          {!xml ? <div className="py-16 text-center text-muted-foreground"><FileCode2 size={38} className="mx-auto mb-3" aria-hidden /><p>Your bot will appear here after upload.</p></div> : tab === 'source' ? <><label className="text-sm" htmlFor="bot-xml-source">Full bot XML</label><textarea id="bot-xml-source" className={`${control} mt-2 min-h-[440px] w-full resize-y font-mono text-xs leading-6`} spellCheck={false} autoCapitalize="off" autoCorrect="off" value={xml} onChange={event => editXml(event.target.value)} /><p className="mt-2 text-xs text-muted-foreground">Edit blocks, variables, and connections here. Only valid XML can be saved or downloaded.</p></> : <>
+          {!xml ? <div className="py-16 text-center text-muted-foreground"><FileCode2 size={38} className="mx-auto mb-3" aria-hidden /><p>Your bot will appear here after upload.</p></div> : tab === 'source' ? <><label className="text-sm" htmlFor="bot-xml-source">Full bot XML</label><textarea id="bot-xml-source" className={`${control} mt-2 min-h-[440px] w-full resize-y font-mono text-xs leading-6`} spellCheck={false} autoCapitalize="off" autoCorrect="off" readOnly={running} value={xml} onChange={event => editXml(event.target.value)} /><p className="mt-2 text-xs text-muted-foreground">Edit blocks, variables, and connections here. Only valid XML can be saved or downloaded.</p></> : <>
             <label className="text-sm">Find a block or setting<input type="search" className={`${control} my-2 w-full`} value={search} onChange={event => setSearch(event.target.value)} placeholder="Stake, duration, prediction, NUM…" /></label>
             <p className="mb-4 text-xs text-muted-foreground">{analysis.blocks.length} blocks · Edit values below. Keep dropdown values and variable names consistent with your bot. Use XML source to change the block structure.</p>
             <div className="builder-canvas" aria-label="Visual XML block workspace">
               <div style={{ zoom }} data-history={historyVersion}>
                 {visibleBlocks.map((block, index) => <section key={block.path.join('.')} className={`builder-block ${block.depth === 0 || /^(trade_definition|before_purchase|during_purchase|after_purchase)$/.test(block.type) ? 'builder-section' : 'builder-setting'} ${block.disabled ? 'builder-disabled' : ''}`} style={{ marginLeft: Math.min(block.depth, 5) * 22 }}>
                   <div className="builder-block-title">{blockTitle(block.type)}</div>
-                  <div className="builder-block-fields">{block.fields.map(field => <label key={field.path.join('.')}><span>{field.name.replace(/_/g, ' ').toLowerCase()}</span><input aria-label={field.name + ' in ' + blockTitle(block.type)} value={field.value} onChange={event => changeField(field.path, event.target.value)} /></label>)}
-                  <label className="builder-enabled"><input type="checkbox" checked={!block.disabled} onChange={event => { try { editXml(setBotBlockDisabled(xml, block.path, !event.target.checked)); } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not change block.'); } }} />Enabled</label></div>
+                  <div className="builder-block-fields">{block.fields.map(field => <label key={field.path.join('.')}><span>{field.name.replace(/_/g, ' ').toLowerCase()}</span><input aria-label={field.name + ' in ' + blockTitle(block.type)} disabled={running} value={field.value} onChange={event => changeField(field.path, event.target.value)} /></label>)}
+                  <label className="builder-enabled"><input type="checkbox" disabled={running} checked={!block.disabled} onChange={event => { try { editXml(setBotBlockDisabled(xml, block.path, !event.target.checked)); } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not change block.'); } }} />Enabled</label></div>
                 </section>)}
                 {analysis.valid && !visibleBlocks.length && <p>{search ? 'No matching blocks.' : 'No blocks found. Open XML source to inspect the bot.'}</p>}
                 {!xml && <button type="button" className="builder-upload" onClick={() => inputRef.current?.click()}>Upload XML to display your bot blocks</button>}
@@ -169,7 +215,23 @@ export function BotWorkspace() {
         </div>
       </div>
     </div>
-    <div className="builder-runbar"><button type="button" disabled title="Imported XML bot execution is not available in this editor"><Play size={23} />Run</button><button type="button" onClick={() => { try { parseBotXml(xml); setStatus('XML structure is valid. Review your strategy before execution.'); } catch (error) { setStatus(error instanceof Error ? error.message : 'Invalid XML.'); } }}>Check XML</button><div role="status"><strong>Bot is not running</strong><small>Uploaded bots can be edited, saved and downloaded. XML execution is not available yet.</small></div></div>
+    <section className="mx-4 mb-44 rounded-xl border border-border p-4" aria-label="Bot session settings">
+      <h2 className="font-semibold">Trading session</h2>
+      <p className="mt-2 text-sm">{auth.activeAccount ? `Account: ${auth.activeAccount.account_type} · ${auth.activeAccountId} · ${auth.activeAccount.currency}` : 'Connect your Deriv account to trade.'}</p>
+      <p className="mt-2 text-sm text-muted-foreground">Run places trades on this account. Start with a demo account. Each contract must settle before the next purchase. Stop prevents new purchases and waits for the open contract to settle.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <label className="text-sm">Maximum trades (1–100)<input className={control + ' mt-1 w-full'} type="number" min="1" max="100" step="1" value={maxTrades} disabled={running} onChange={event => setMaxTrades(event.target.value)} /></label>
+        <label className="text-sm">Maximum stake ({auth.activeAccount?.currency ?? 'account currency'})<input className={control + ' mt-1 w-full'} type="number" min="0.01" step="0.01" value={maxStake} disabled={running} onChange={event => setMaxStake(event.target.value)} /></label>
+        <label className="text-sm">Session loss limit<input className={control + ' mt-1 w-full'} type="number" min="0.01" step="0.01" value={lossLimit} disabled={running} onChange={event => setLossLimit(event.target.value)} /></label>
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">A purchase is blocked when its full stake could exceed the loss limit. Supported: digit contracts, 1–10 ticks, variables, arithmetic, comparisons, conditional purchases, win/loss checks, and Trade again. Tick indicators, sell rules, payout-based stakes, legacy XML and automatic error retries are not supported. Unsupported blocks are rejected before trading.</p>
+      <p className="mt-3 text-sm">Trades: {progress.trades} · Session profit/loss: {progress.profit.toFixed(2)} {auth.activeAccount?.currency ?? ''} · <Link href="/reports" className="underline">Trade history</Link></p>
+    </section>
+    <div className="builder-runbar">
+      {running ? <button type="button" onClick={() => { session.current?.abort(); setProgress(previous => ({ ...previous, message: 'Stopping. An open contract will still settle.' })); }}><Square size={23} />Stop</button> : <button type="button" disabled={!analysis.valid || busy || !isConnected || !auth.wsUrl} onClick={run}><Play size={23} />Run</button>}
+      <button type="button" disabled={running || busy} onClick={() => { try { const program = compileBotXml(xml); setStatus(`Ready: ${program.preview.contract_type} on ${program.preview.symbol}, ${program.preview.duration} tick(s), stake ${program.preview.amount}. Review your account and limits before Run.`); } catch (error) { setStatus(error instanceof Error ? error.message : 'Invalid bot.'); } }}>Check bot</button>
+      <div role="status" aria-live="polite"><strong>{running ? 'Bot session active' : 'Bot is not running'}</strong><small>{progress.message}</small></div>
+    </div>
     <style>{`
       .builder-nav{display:flex;gap:0;overflow-x:auto;background:#172029;color:#d9e5eb;white-space:nowrap}
       .builder-nav a,.builder-nav>span{display:flex;align-items:center;gap:9px;padding:20px;font-weight:700}
@@ -199,3 +261,4 @@ export function BotWorkspace() {
     `}</style>
   </main>;
 }
+
