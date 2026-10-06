@@ -384,8 +384,8 @@
 .copy-trading-panel > p { margin: 0 0 18px; color: #b9c0c2; font-size: 14px; line-height: 1.5; }
 .copy-trading-fields { display: grid; gap: 13px; }
 .copy-trading-fields label { display: grid; gap: 5px; color: #e5e8e9; font-size: 13px; }
-.copy-trading-fields input { width: 100%; min-height: 43px; border: 1px solid #464b4e; border-radius: 6px; padding: 9px 11px; outline: none; background: #0d0e0f; color: white; font-size: 15px; }
-.copy-trading-fields input:focus { border-color: #68c7b8; }
+.copy-trading-fields input, .copy-trading-fields select { width: 100%; min-height: 43px; border: 1px solid #464b4e; border-radius: 6px; padding: 9px 11px; outline: none; background: #0d0e0f; color: white; font-size: 15px; }
+.copy-trading-fields input:focus, .copy-trading-fields select:focus { border-color: #68c7b8; }
 .copy-trading-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 18px 0 0; }
 .copy-trading-actions button { min-height: 44px; border-radius: 6px; background: #4aa49b; color: white; font-weight: 750; }
 .copy-trading-actions button:last-child { background: #a4363f; }

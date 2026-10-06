@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { NewCopyTrading } from './new-copy-trading';
 
 type CopyAction = 'copy_start' | 'copy_stop';
 
@@ -40,7 +41,7 @@ function sendCopyCommand(appId: string, followerToken: string, traderToken: stri
   });
 }
 
-export function CopyTradingPanel() {
+function LegacyCopyTradingPanel() {
   const [appId, setAppId] = useState(/^\d+$/.test(process.env.NEXT_PUBLIC_DERIV_APP_ID ?? '') ? process.env.NEXT_PUBLIC_DERIV_APP_ID! : '');
   const [followerToken, setFollowerToken] = useState('');
   const [traderToken, setTraderToken] = useState('');
@@ -91,4 +92,9 @@ export function CopyTradingPanel() {
       <p className="copy-trading-footnote">Tokens stay in this browser tab’s memory and are sent directly to Deriv over an encrypted WebSocket when you press Start or Stop. Reloading clears the fields; Deriv may continue copying until you stop it with the same trader token. This legacy Options API does not copy MT5 trades. A numeric legacy app ID and eligible Deriv accounts are required.</p>
     </section>
   );
+}
+
+export function CopyTradingPanel() {
+  const [mode, setMode] = useState('new');
+  return <><div className="copy-trading-actions"><button onClick={() => setMode('new')} disabled={mode === 'new'}>New App ID</button><button onClick={() => setMode('legacy')} disabled={mode === 'legacy'}>Legacy numeric App ID</button></div>{mode === 'new' ? <NewCopyTrading /> : <LegacyCopyTradingPanel />}</>;
 }
