@@ -1,3 +1,4 @@
+import { RiskDisclaimer } from '@/components/custom/risk-disclaimer';
 import { AccessGate } from '@/components/custom/access-gate';
 import type { Metadata } from 'next';
 import { buildFaviconUri } from '@/lib/build-favicon-uri';
@@ -38,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <TemplateI18nProvider>
           <TemplateLayout>
-            <LogoSrcProvider logoSrc={logoSrc}><AccessGate>{children}</AccessGate></LogoSrcProvider>
+            <LogoSrcProvider logoSrc={logoSrc}><AccessGate>{children}</AccessGate><RiskDisclaimer /></LogoSrcProvider>
           </TemplateLayout>
         </TemplateI18nProvider>
       </body>

@@ -60,7 +60,6 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   const [advancedType, setAdvancedType] = useState<AdvancedTradeType | null>(null);
   const [advancedBusy, setAdvancedBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [showRisk, setShowRisk] = useState(false);
   const {
     symbols, activeSymbol, selectSymbol, currentTick, lastDigit, digitStats, pipSize,
     tradeType, setTradeType, contractMode, setContractMode, selectedDigit, setSelectedDigit,
@@ -142,8 +141,6 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
         {advancedType ? <AdvancedManualTrader key={advancedType} type={advancedType} onBusy={setAdvancedBusy} initialSymbol={activeSymbol?.underlying_symbol} /> : <>
         <button type="button" className="mobile-learn" onClick={() => setShowHelp(show => !show)} aria-expanded={showHelp}>Learn about this trade type</button>
         {showHelp && <p className="mobile-help">{tradeType === 'over-under' ? 'Over wins when the final digit is higher than your prediction; Under wins when it is lower. An equal digit loses.' : tradeType === 'even-odd' ? 'Even wins on 0, 2, 4, 6 or 8. Odd wins on 1, 3, 5, 7 or 9.' : 'Matches wins when the final digit equals your prediction. Differs wins when it does not.'}</p>}
-        <button type="button" className="mobile-risk-button" aria-expanded={showRisk} aria-controls="mobile-risk-info" onClick={() => setShowRisk((show) => !show)}>Risk Disclaimer</button>
-        {showRisk && <p id="mobile-risk-info" className="mobile-help">Trading involves risk. You can lose your entire stake on each contract. Historical digit frequencies do not predict future results. Only trade with money you can afford to lose.</p>}
         {tradeType !== 'even-odd' && (
           <div className="mobile-prediction" role="group" aria-label="Prediction digit">
             {Array.from({ length: 10 }, (_, digit) => (
