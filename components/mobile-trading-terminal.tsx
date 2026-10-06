@@ -60,6 +60,32 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   const [advancedType, setAdvancedType] = useState<AdvancedTradeType | null>(null);
   const [advancedBusy, setAdvancedBusy] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [selector, setSelector] = useState<'duration' | 'amount' | null>(null);
+  const [draftTicks, setDraftTicks] = useState(1);
+  const [draftStake, setDraftStake] = useState('');
+  const [selectorError, setSelectorError] = useState('');
+  const openSelector = (tab: 'duration' | 'amount') => {
+    setDraftTicks(props.duration); setDraftStake(props.stake);
+    setSelectorError(''); setSelector(tab);
+  };
+  const confirmSelector = () => {
+    if (!Number.isInteger(draftTicks) || draftTicks < props.durationLimits.min || draftTicks > props.durationLimits.max) {
+      setSelectorError(`Choose between ${props.durationLimits.min} and ${props.durationLimits.max} ticks.`); return;
+    }
+    if (!Number.isFinite(Number(draftStake)) || Number(draftStake) <= 0) {
+      setSelectorError('Stake must be greater than 0.'); return;
+    }
+    props.setDuration(draftTicks); props.setStake(Number(draftStake).toFixed(2)); setSelector(null);
+  };
+  const keypad = (key: string) => {
+    setSelectorError('');
+    setDraftStake(previous => {
+      if (key === 'delete') return previous.slice(0, -1);
+      if (key === '.' && previous.includes('.')) return previous;
+      if (previous.includes('.') && previous.split('.')[1].length >= 2) return previous;
+      return (previous === '0' && key !== '.' ? key : previous + key).slice(0, 12);
+    });
+  };
   const {
     symbols, activeSymbol, selectSymbol, currentTick, lastDigit, digitStats, pipSize,
     tradeType, setTradeType, contractMode, setContractMode, selectedDigit, setSelectedDigit,
@@ -92,6 +118,38 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
         </Link>
         {isAuthenticated && <Link href="/reports"><BriefcaseBusiness size={20} /> Positions</Link>}
       </nav>
+
+      {selector && <dialog ref={node => { if (node && !node.open) node.showModal(); }} aria-label="Select duration and stake" onCancel={() => setSelector(null)} style={{ position: 'fixed', inset: 0, width: '100%', height: '100dvh', maxWidth: 'none', maxHeight: 'none', margin: 0, padding: '72px 12px 30px', border: 0, background: 'rgba(0,0,0,.72)', color: '#fff', zIndex: 100 }} onKeyDown={event => { if (event.key === 'Escape') setSelector(null); }} onClick={event => { if (event.target === event.currentTarget) setSelector(null); }}>
+        <div style={{ position: 'relative', maxWidth: 420, minHeight: 470, margin: 'auto', padding: '32px 0', background: '#111314', boxShadow: '0 16px 60px #000' }}>
+          <button type="button" autoFocus aria-label="Close selector without saving" onClick={() => setSelector(null)} style={{ position: 'absolute', right: 14, top: 8, padding: 8, fontSize: 24 }}>×</button>
+          <div role="tablist" aria-label="Trade settings" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', marginTop: 10 }}>
+            {(['duration', 'amount'] as const).map(tab => <button type="button" role="tab" aria-selected={selector === tab} key={tab} onClick={() => { setSelector(tab); setSelectorError(''); }} style={{ padding: '10px 4px', borderBottom: selector === tab ? '2px solid #e53250' : '2px solid transparent', color: selector === tab ? '#fff' : '#999' }}>
+              <span style={{ display: 'block' }}>{tab === 'duration' ? 'Duration' : 'Amount'}</span>
+              <small>{tab === 'duration' ? `${draftTicks} ${draftTicks === 1 ? 'Tick' : 'Ticks'}` : `${draftStake || '0'} USD`}</small>
+            </button>)}
+          </div>
+          {selector === 'duration' ? <div style={{ padding: '54px 24px 24px', textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
+              <button type="button" aria-label="Decrease ticks" disabled={draftTicks <= durationLimits.min} onClick={() => setDraftTicks(value => Math.max(durationLimits.min, value - 1))} style={{ fontSize: 32, padding: 16 }}>−</button>
+              <strong style={{ fontSize: 80, lineHeight: 1.2, fontWeight: 400, color: '#e53250' }}>{String(draftTicks).padStart(2, '0')}</strong>
+              <button type="button" aria-label="Increase ticks" disabled={draftTicks >= durationLimits.max} onClick={() => setDraftTicks(value => Math.min(durationLimits.max, value + 1))} style={{ fontSize: 32, padding: 16 }}>+</button>
+            </div>
+            <p style={{ color: '#e53250', marginTop: 8 }}>{draftTicks === 1 ? 'Tick' : 'Ticks'}</p>
+            <button type="button" onClick={confirmSelector} style={{ marginTop: 34, padding: '14px 38px', background: '#0c0e0f', fontWeight: 700 }}>OK</button>
+          </div> : <div>
+            <div style={{ padding: 12, borderBottom: '2px solid #e53250', textAlign: 'center', fontWeight: 700 }}>Stake</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '24px 48px 12px', background: '#0c0e0f' }}>
+              <button type="button" aria-label="Decrease stake" onClick={() => setDraftStake(Math.max(0.01, Number(draftStake || 0) - 1).toFixed(2))} style={{ padding: 12, fontSize: 24 }}>−</button>
+              <input aria-label="Stake amount" type="text" inputMode="decimal" value={draftStake} onChange={event => { if (/^\d*(\.\d{0,2})?$/.test(event.target.value)) { setDraftStake(event.target.value); setSelectorError(''); } }} style={{ width: '60%', background: 'transparent', color: '#fff', border: 0, textAlign: 'center', fontSize: 18, fontWeight: 700 }} />
+              <button type="button" aria-label="Increase stake" onClick={() => setDraftStake((Number(draftStake || 0) + 1).toFixed(2))} style={{ padding: 12, fontSize: 24 }}>+</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr) 1.15fr', gap: 8, padding: '0 48px' }}>
+              {['7','8','9','delete','4','5','6','OK','1','2','3','0','.'].map((key, index) => key ? <button type="button" key={index} aria-label={key === 'delete' ? 'Delete last digit' : key} onClick={() => key === 'OK' ? confirmSelector() : keypad(key)} style={{ minHeight: 52, background: '#0c0e0f', gridColumn: key === 'delete' || key === 'OK' ? 4 : key === '0' ? 2 : key === '.' ? 3 : key === '7' || key === '4' || key === '1' ? 1 : key === '8' || key === '5' || key === '2' ? 2 : 3, gridRow: key === 'delete' ? '1 / span 2' : key === 'OK' ? '3 / span 2' : key === '7' || key === '8' || key === '9' ? 1 : key === '4' || key === '5' || key === '6' ? 2 : key === '1' || key === '2' || key === '3' ? 3 : 4, fontWeight: key === 'OK' ? 700 : 400 }}>{key === 'delete' ? '⌫' : key}</button> : <span key={index} />)}
+            </div>
+          </div>}
+          {selectorError && <p role="alert" style={{ color: '#ff5269', textAlign: 'center', padding: 16 }}>{selectorError}</p>}
+        </div>
+      </dialog>}
 
       <section ref={marketRef} className="mobile-market" aria-label="Live market">
         <div className="mobile-market-selector">
@@ -149,12 +207,8 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           </div>
         )}
         <div className="mobile-trade-inputs">
-          <label><span>ticks</span>
-            <input aria-label="Duration in ticks" type="number" inputMode="numeric" min={durationLimits.min} max={durationLimits.max} value={duration} onChange={(event) => { const value = Number(event.target.value); if (Number.isInteger(value)) setDuration(value); }} />
-          </label>
-          <label><span>USD</span>
-            <input aria-label="Stake in USD" type="number" inputMode="decimal" min="0.01" step="0.01" value={stake} onChange={(event) => setStake(event.target.value)} />
-          </label>
+          <button type="button" aria-label="Select duration in ticks" disabled={isBuying} onClick={() => openSelector('duration')} style={{ padding: '12px 6px', textAlign: 'left' }}>{duration} {duration === 1 ? 'tick' : 'ticks'}</button>
+          <button type="button" aria-label="Select stake in USD" disabled={isBuying} onClick={() => openSelector('amount')} style={{ padding: '12px 6px', fontWeight: 700 }}>{Number(stake || 0).toFixed(2)} USD</button>
           <span className="mobile-stake-caption">Stake</span>
         </div>
         <div className="mobile-direction" role="group" aria-label="Contract direction">
