@@ -10,6 +10,7 @@ import type {
   ProposalParams,
   DurationLimits,
   BuyResult,
+  ProposalResponse,
 } from '@deriv/core';
 
 import { useBaseTrading } from '@/hooks/use-base-trading';
@@ -264,18 +265,48 @@ export function useDigitsTrading({
     proposalParams ? { ...proposalParams, contractType: firstMode } : null);
   const { proposal: secondProposal } = useProposal(tradingWs, tradingIsConnected,
     proposalParams ? { ...proposalParams, contractType: secondMode } : null);
+  const settingsKey = JSON.stringify([proposalParams, tradeType, isAuthenticated]);
+  const currentSettings = useRef({ key: settingsKey, ws: tradingWs, connected: tradingIsConnected });
+  currentSettings.current = { key: settingsKey, ws: tradingWs, connected: tradingIsConnected };
   const purchaseLock = useRef(false);
   const modeProposals = { [firstMode]: firstProposal, [secondMode]: secondProposal };
   const buyContract = useCallback(async (mode?: ContractMode) => {
     const quote = mode === firstMode ? firstProposal : mode === secondMode ? secondProposal : mode ? null : proposal;
-    if (!quote || !tradingIsConnected || isBuying || purchaseLock.current) return;
+    if (!quote || !proposalParams || !tradingWs || !tradingIsConnected || !isAuthenticated || isBuying || purchaseLock.current) return;
     purchaseLock.current = true;
     try {
-      await buyWithProposal(quote);
+      const requestKey = settingsKey;
+      const requestWs = tradingWs;
+      const requestedMode = mode ?? contractMode;
+      await buyWithProposal(quote, async () => {
+        const response = await requestWs.send<ProposalResponse>({
+          proposal: 1,
+          amount: proposalParams.amount,
+          basis: proposalParams.basis,
+          contract_type: requestedMode,
+          currency: proposalParams.currency,
+          underlying_symbol: proposalParams.symbol,
+          duration: proposalParams.duration,
+          duration_unit: proposalParams.durationUnit,
+          ...(!['DIGITEVEN', 'DIGITODD'].includes(requestedMode) ? { barrier: selectedDigit } : {}),
+        });
+        const current = currentSettings.current;
+        if (current.key !== requestKey || current.ws !== requestWs || !current.connected) {
+          throw new Error('Trade settings or connection changed. Review the quote and tap Buy again.');
+        }
+        const fresh = response.proposal;
+        if (!fresh) throw new Error('No fresh purchase quote returned.');
+        return {
+          id: fresh.id, askPrice: Number(fresh.ask_price), payout: Number(fresh.payout),
+          longcode: fresh.longcode,
+          minStake: Number(fresh.validation_params?.stake?.min ?? 0),
+          maxPayout: Number(fresh.validation_params?.payout?.max ?? 0),
+        };
+      });
     } finally {
       purchaseLock.current = false;
     }
-  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal]);
+  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit]);
 
   return {
     isConnected,
