@@ -108,7 +108,7 @@ export function NewCopyTrading() {
     <h1>Copy Trading</h1>
     <p>Connect your new Deriv App ID. Copies future digit and barrier-free Rise/Fall purchases while this page stays open. Entries and results can differ from the trader’s.</p>
     <div className="copy-trading-fields">
-      <label>Deriv App ID<input disabled={locked} value={appId} autoComplete="off" spellCheck={false} onChange={e => { setAppId(e.target.value); invalidate(); }} placeholder="Your registered App ID (letters and numbers)" /></label>
+      <label hidden style={{ display: 'none' }}>Deriv App ID<input disabled={locked} value={appId} autoComplete="off" spellCheck={false} onChange={e => { setAppId(e.target.value); invalidate(); }} placeholder="Your registered App ID (letters and numbers)" /></label>
       <label>Your follower personal access token<input disabled={locked} type="password" autoComplete="off" value={followerToken} onChange={e => { setFollowerToken(e.target.value); invalidate(); }} placeholder="New-platform token with trade scope" /></label>
       <label>Trader’s authorised personal access token<input disabled={locked} type="password" autoComplete="off" value={traderToken} onChange={e => { setTraderToken(e.target.value); invalidate(); }} placeholder="New-platform token with trade scope" /></label>
       <p>The new authenticated trader connection requires trade scope. Only use a trader account whose owner authorises this access. Circletool sends purchases only through the follower connection.</p>

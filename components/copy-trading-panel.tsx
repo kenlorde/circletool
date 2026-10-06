@@ -78,7 +78,7 @@ function LegacyCopyTradingPanel() {
       <h1>Copy Trading</h1>
       <p>Copy a trader’s future Options trades automatically through Deriv. The trader must enable copiers and give you a <strong>read-only token</strong>. Use your own <strong>trade-enabled token</strong> for the account that will copy.</p>
       <div className="copy-trading-fields">
-        <label>Legacy Deriv app ID<input inputMode="numeric" autoComplete="off" value={appId} onChange={(event) => setAppId(event.target.value)} placeholder="Your registered numeric app ID" /></label>
+        <label hidden style={{ display: 'none' }}>Legacy Deriv app ID<input inputMode="numeric" autoComplete="off" value={appId} onChange={(event) => setAppId(event.target.value)} placeholder="Your registered numeric app ID" /></label>
         <label>Your follower account API token<input type="password" autoComplete="off" spellCheck={false} value={followerToken} onChange={(event) => setFollowerToken(event.target.value)} placeholder="Token with trade scope" /></label>
         <label>Trader’s read-only API token<input type="password" autoComplete="off" spellCheck={false} value={traderToken} onChange={(event) => setTraderToken(event.target.value)} placeholder="Token shared by the trader" /></label>
         <label>Maximum stake per copied trade (account currency)<input type="number" inputMode="decimal" min="0.01" step="0.01" value={maxStake} onChange={(event) => setMaxStake(event.target.value)} /></label>
