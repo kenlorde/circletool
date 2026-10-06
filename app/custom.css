@@ -30,3 +30,17 @@
   border-radius: 0;
   object-fit: contain;
 }
+
+.circle-access{min-height:100dvh;background:radial-gradient(ellipse at 50% 35%,#202438 0%,#090f1c 65%);color:#eef1f8;padding:80px 20px 40px;overflow-y:auto;height:100dvh}
+.access-nav{display:flex;overflow-x:auto;gap:24px;border-bottom:1px solid #28334c;margin:0 -20px 40px;padding:18px 20px;white-space:nowrap}
+.access-nav a{display:flex;align-items:center;gap:7px;font-weight:700;color:#dce6f8}.access-nav svg{color:#d4b54c}
+.access-card{max-width:640px;margin:clamp(20px,8vh,100px) auto 30px;padding:36px;border:1px solid #645a35;border-radius:30px;background:#11172c;text-align:center;box-shadow:0 20px 80px #0004}
+.access-lock{display:flex;justify-content:center;align-items:center;width:80px;height:80px;border-radius:50%;border:1px solid #766737;color:#e5c65f;background:#202431;margin:0 auto 24px;box-shadow:0 0 0 4px #d4b54c0b}
+.access-label{display:inline-block;letter-spacing:.19em;text-transform:uppercase;font-size:12px;color:#e5c65f;border:1px solid #645a35;border-radius:24px;padding:7px 17px}
+.access-card h1{font-family:Georgia,serif;font-size:42px;line-height:1.2;margin:20px 0;color:#f7f5ee;font-weight:700}
+.access-card p{color:#a5aec3;line-height:1.7;font-size:17px}.access-card strong{color:#eef1f8}
+.access-login{display:flex;justify-content:center;align-items:center;gap:18px;background:linear-gradient(110deg,#f7e8ab,#cba324);border-radius:16px;width:100%;padding:19px 12px;margin:28px 0 24px;color:#141414;font-weight:800;text-transform:uppercase;letter-spacing:.09em;min-height:62px}
+.access-login:disabled{opacity:.65;cursor:wait}.access-signup button{color:#e7ce7b;text-decoration:underline;text-underline-offset:5px;margin-left:8px}
+.access-benefits{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #273047;margin-top:30px;padding-top:25px;gap:10px;color:#a5aec3;font-size:13px}.access-benefits span{display:flex;align-items:center;flex-direction:column;gap:12px}.access-benefits svg{color:#d4b54c;width:24px;height:24px}
+.access-error{margin:20px 0;color:#ffb3ad;font-size:14px}.access-error button{display:block;text-decoration:underline;margin:12px auto}
+@media(max-width:480px){.circle-access{padding-left:16px;padding-right:16px}.access-card{padding:30px 20px;border-radius:26px}.access-card h1{font-size:36px}.access-card p{font-size:15px}.access-nav{margin-left:-16px;margin-right:-16px}.access-benefits{font-size:11px}.access-login{font-size:14px}}

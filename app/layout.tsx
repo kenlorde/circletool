@@ -1,3 +1,4 @@
+import { AccessGate } from '@/components/custom/access-gate';
 import type { Metadata } from 'next';
 import { buildFaviconUri } from '@/lib/build-favicon-uri';
 import { getLogoSrc } from '@/lib/get-logo-src';
@@ -37,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <TemplateI18nProvider>
           <TemplateLayout>
-            <LogoSrcProvider logoSrc={logoSrc}>{children}</LogoSrcProvider>
+            <LogoSrcProvider logoSrc={logoSrc}><AccessGate>{children}</AccessGate></LogoSrcProvider>
           </TemplateLayout>
         </TemplateI18nProvider>
       </body>

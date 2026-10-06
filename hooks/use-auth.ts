@@ -345,6 +345,7 @@ export function useAuth(): UseAuthReturn {
 
   // Logout: close WS (handled by useDerivWS cleanup), clear storage, reset state
   const logout = useCallback(() => {
+    void fetch('/api/access-session', { method: 'DELETE' }).catch(() => {});
     coreLogout();
     setAccounts([]);
     setActiveAccountId(null);
