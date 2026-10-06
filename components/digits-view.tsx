@@ -238,6 +238,8 @@ export function DigitsView({
   }, [hasAppConfig, isMobile, buyError, clearBuyResult, localize]);
   useEffect(() => {
     if ((!hasAppConfig && !isMobile) || !buyResult) return;
+    // Mobile already shows the trade-opened notification above the market.
+    if (!isMobile) {
     toast.success(localize('Contract Purchased'), {
       description: localize(
         'Buy price: {{buyPrice}} USD | Payout: {{payout}} USD | Balance: {{balance}} USD',
@@ -248,6 +250,7 @@ export function DigitsView({
         }
       ),
     });
+    }
     clearBuyResult();
   }, [hasAppConfig, isMobile, buyResult, clearBuyResult, localize]);
 
