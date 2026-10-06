@@ -1,4 +1,4 @@
-.page { min-height:100dvh; background:radial-gradient(ellipse at top left,#20343d 0,#151a20 48%,#090f1b 100%); color:#edf2f6; }
+.page { height:100%; min-height:0; min-width:0; flex:1; overflow-y:auto; overflow-x:hidden; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; background:radial-gradient(ellipse at top left,#20343d 0,#151a20 48%,#090f1b 100%); color:#edf2f6; }
 .spacer { height:64px; }
 .nav { display:flex; align-items:stretch; overflow-x:auto; gap:0; background:#14212a; border-bottom:1px solid #32414b; }
 .nav a,.current { display:flex; align-items:center; gap:9px; white-space:nowrap; padding:20px 22px; font-size:16px; font-weight:650; }
@@ -31,3 +31,21 @@
 .note,.empty { color:#adb9c8; font-size:13px; line-height:1.7; margin-top:20px; }
 .page button:focus-visible,.nav a:focus-visible { outline:3px solid #5ce7c2; outline-offset:3px; }
 @media(max-width:480px) { .content { padding:15px 12px 30px; } .nav a,.current { padding:17px 15px; font-size:14px; } .card { min-height:260px; padding:21px 18px; } .card p { max-width:90%; font-size:16px; } }
+
+.content { padding-bottom:calc(40px + env(safe-area-inset-bottom)); }
+.views { display:flex; gap:10px; margin:0 0 18px; }
+.views button,.next { border:1px solid #48586a; border-radius:12px; padding:12px 17px; font-weight:650; }
+.views button[aria-pressed="true"] { background:#073d2e; border-color:#39c6a0; }
+.views button span { margin-left:8px; background:#ffffff20; border-radius:20px; padding:2px 8px; }
+.next { display:block; margin:20px 0; background:#0b372b; }
+.transactions h1 { font-size:24px; font-weight:750; margin-bottom:8px; }
+.transactions>p { line-height:1.6; color:#b2becb; }
+.summary { display:flex; flex-wrap:wrap; gap:15px 24px; padding:18px; margin:18px 0; border:1px solid #344454; border-radius:15px; }
+.summary span { display:grid; gap:6px; font-size:13px; color:#a9b6c3; }.summary b { font-size:20px; color:#eef4f8; }
+.transactionList { display:grid; gap:13px; margin-top:20px; }
+.transactionList li { border:1px solid #354452; border-radius:16px; padding:18px; background:#0e1724; }
+.transactionTop { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px; }
+.transactionList small { color:#95a5b7; font-size:12px; overflow-wrap:anywhere; }
+.transactionAmounts { display:flex; flex-wrap:wrap; gap:15px 25px; margin-top:16px; font-size:13px; }
+.transactionAmounts span { display:grid; gap:5px; color:#a9b6c3; }.transactionAmounts b { color:#edf5fb; }
+.win,.summary .win,.transactionAmounts .win { color:#54dbae; }.loss,.summary .loss,.transactionAmounts .loss { color:#ff8494; }
