@@ -4,9 +4,10 @@ import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useBaseTrading } from '@/hooks/use-base-trading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { readBotTransactions, type BotTransaction } from '@/lib/bot-transactions';
 const TYPES = ['DIGITUNDER'];
 type Reply = { proposal?: { id: string; ask_price: number | string }; buy?: { contract_id: number }; proposal_open_contract?: { is_sold: number; profit: number | string }; portfolio?: { contracts: unknown[] } };
-export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = false, onRunStateChange }: { barrier?: '7' | '8'; sessionLock: RefObject<boolean>; anotherBotRunning?: boolean; onRunStateChange: (running: boolean) => void }) {
+export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = false, onRunStateChange, onTransaction }: { barrier?: '7' | '8'; sessionLock: RefObject<boolean>; anotherBotRunning?: boolean; onRunStateChange: (running: boolean) => void; onTransaction: (transaction: BotTransaction) => void }) {
   const botName = barrier === '8' ? 'Expert AI' : 'Master AI';
   const { ws, isConnected, auth, balanceSync } = useDerivWSContext();
   const market = useBaseTrading({ ws, isConnected, isAuthenticated: !!auth.wsUrl, contractTypes: TYPES });
@@ -33,6 +34,9 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
         if (pending === 'unknown') throw Error('A previous purchase was not confirmed. Check account transactions before trading. This bot remains locked to prevent duplicate purchases.');
         const check = await ws.send<Reply>({ proposal_open_contract: 1, contract_id: Number(pending) });
         if (!check.proposal_open_contract?.is_sold) throw Error('A previous bot contract is still open. Wait for settlement before restarting.');
+        const previous = readBotTransactions(accountId).find(x => x.contractId === Number(pending));
+        const recoveredProfit = Number(check.proposal_open_contract.profit);
+        if (previous && Number.isFinite(recoveredProfit)) onTransaction({ ...previous, profit: recoveredProfit, settledAt: Date.now(), status: recoveredProfit > 0 ? 'won' : recoveredProfit < 0 ? 'lost' : 'break-even' });
         localStorage.removeItem(key);
         await balanceSync.refresh();
       }
@@ -56,6 +60,8 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
         const id = purchase.buy?.contract_id;
         if (!id) throw Error('Purchase confirmation missing. Stopped; check account transactions.');
         localStorage.setItem(key, String(id));
+        const transaction: BotTransaction = { accountId, botId: barrier === '8' ? 'expert' : 'master', contractId: id, symbol, currency, barrier, ticks: duration, stake: price, purchasedAt: Date.now(), status: 'open' };
+        onTransaction(transaction);
         say('Contract ' + id + ' open. Waiting for settlement…');
         const deadline = Date.now() + 180000;
         let settled = false;
@@ -68,6 +74,7 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
             if (!Number.isFinite(pnl)) throw Error('Settlement profit unavailable. Stopped.');
             total = Math.round((total + pnl) * 100) / 100; count++;
             localStorage.removeItem(key); settled = true;
+            onTransaction({ ...transaction, profit: pnl, settledAt: Date.now(), status: pnl > 0 ? 'won' : pnl < 0 ? 'lost' : 'break-even' });
             if (mounted.current) { setProfit(total); setTrades(count); }
             const refreshed = await balanceSync.refresh();
             say('Contract settled: ' + pnl.toFixed(2) + ' ' + currency + (refreshed ? '. Account balance refreshed.' : '. Balance refresh unavailable; check Deriv account history.'));
