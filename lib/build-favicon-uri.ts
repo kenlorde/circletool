@@ -19,6 +19,9 @@ export function buildFaviconUri(): string | null {
   // both the Header component and as the favicon. The App Builder writes the
   // logo here at deploy time; for local dev place any logo at public/logo.<ext>.
   const publicDir = path.join(process.cwd(), 'public');
+  if (fs.existsSync(path.join(publicDir, 'circletool-logo-red-gold.png'))) {
+    return '/circletool-logo-red-gold.png';
+  }
   for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
     if (fs.existsSync(path.join(publicDir, `logo.${ext}`))) {
       return `/logo.${ext}`;

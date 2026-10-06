@@ -12,9 +12,15 @@ import './custom.css';
 export function generateMetadata(): Metadata {
   const faviconUri = buildFaviconUri();
   return {
-    title: process.env.NEXT_PUBLIC_DERIV_APP_NAME?.trim() || 'Deriv Digits Trading App',
+    title: process.env.NEXT_PUBLIC_DERIV_APP_NAME?.trim() || 'Circletool',
     description: 'A white-label trading application powered by Deriv',
-    ...(faviconUri ? { icons: { icon: faviconUri } } : {}),
+    applicationName: 'Circletool',
+    manifest: '/manifest.webmanifest',
+    appleWebApp: { capable: true, title: 'Circletool', statusBarStyle: 'default' },
+    icons: {
+      ...(faviconUri ? { icon: faviconUri } : {}),
+      apple: [{ url: '/circletool-app-icon.png', type: 'image/png', sizes: '1254x1254' }],
+    },
   };
 }
 

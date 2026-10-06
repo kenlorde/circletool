@@ -22,3 +22,11 @@
     animation: none;
   }
 }
+
+/* Preserve the complete Circletool logo in the compact header. */
+.circletool-header > div:first-child > img[src*="circletool-logo-red-gold.png"] {
+  width: 54px;
+  height: 48px;
+  border-radius: 0;
+  object-fit: contain;
+}
