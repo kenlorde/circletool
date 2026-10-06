@@ -19,6 +19,7 @@ const sections = [
   { href: '/copy-trading', title: 'Copy Trading', icon: BriefcaseBusiness },
   { href: '/tick-analysis', title: 'Tick Analysis', icon: Activity },
   { href: '/charts', title: 'Charts', icon: BarChart3 },
+  { href: '/academy', title: 'Academy', icon: Monitor },
 ];
 export function CircletoolDashboard() {
   const { auth } = useDerivWSContext();
