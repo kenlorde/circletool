@@ -116,7 +116,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
         <Link href="/charts">
           <BarChart3 size={20} /> Charts
         </Link>
-        {isAuthenticated && <Link href="/reports"><BriefcaseBusiness size={20} /> Positions</Link>}
+        <Link href="/academy"><BriefcaseBusiness size={20} /> Academy</Link>
       </nav>
 
       {selector && <dialog ref={node => { if (node && !node.open) node.showModal(); }} aria-label="Select duration and stake" onCancel={() => setSelector(null)} style={{ position: 'fixed', inset: 0, width: '100%', height: '100dvh', maxWidth: 'none', maxHeight: 'none', margin: 0, padding: '72px 12px 30px', border: 0, background: 'rgba(0,0,0,.72)', color: '#fff', zIndex: 100 }} onKeyDown={event => { if (event.key === 'Escape') setSelector(null); }} onClick={event => { if (event.target === event.currentTarget) setSelector(null); }}>
