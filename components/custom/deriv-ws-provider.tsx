@@ -12,6 +12,7 @@ interface DerivWSContextValue {
   isConnected: boolean;
   isExhausted: boolean;
   auth: UseAuthReturn;
+  balanceSync: ReturnType<typeof useBalanceSync>;
 }
 
 const DerivWSContext = createContext<DerivWSContextValue | null>(null);
@@ -34,7 +35,7 @@ export function DerivWSProvider({ children }: { children: React.ReactNode }) {
   // showed the user as "Please log in." right after a successful login
   // (deriv-com/deriv-api-v2#587). Matches the `isAuthenticated: !!auth.wsUrl`
   // gate every other authenticated consumer already uses.
-  useBalanceSync(
+  const balanceSync = useBalanceSync(
     ws,
     isConnected,
     auth.wsUrl ? auth.activeAccountId : null,
@@ -42,7 +43,7 @@ export function DerivWSProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <DerivWSContext.Provider value={{ ws, isConnected, isExhausted, auth }}>
+    <DerivWSContext.Provider value={{ ws, isConnected, isExhausted, auth, balanceSync }}>
       {children}
     </DerivWSContext.Provider>
   );

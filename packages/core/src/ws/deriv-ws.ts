@@ -77,9 +77,27 @@ export class DerivWS {
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private url: string;
   private isConnecting = false;
+  private requestTimeoutMs: number;
 
-  constructor(url?: string) {
+  constructor(url?: string, requestTimeoutMs = 15000) {
     this.url = url ?? getPublicWsUrl();
+    this.requestTimeoutMs = requestTimeoutMs;
+  }
+
+  private addPending(reqId: number, pending: PendingRequest): void {
+    const timer = setTimeout(() => {
+      this.pendingRequests.delete(reqId);
+      pending.reject(new Error('Deriv request timed out. Check account history before retrying a purchase.'));
+    }, this.requestTimeoutMs);
+    this.pendingRequests.set(reqId, {
+      resolve: data => { clearTimeout(timer); pending.resolve(data); },
+      reject: error => { clearTimeout(timer); pending.reject(error); },
+    });
+  }
+
+  private rejectPending(): void {
+    for (const pending of this.pendingRequests.values()) pending.reject(new Error('Deriv connection closed. Check account history before retrying a purchase.'));
+    this.pendingRequests.clear();
   }
 
   /**
@@ -156,6 +174,7 @@ export class DerivWS {
       this.ws.onclose = () => {
         this.isConnecting = false;
         this.stopPing();
+        this.rejectPending();
         this.subscriptionHandlers.clear();
         this.notifyConnectionState(false);
         this.attemptReconnect();
@@ -176,7 +195,7 @@ export class DerivWS {
       const reqId = ++this.reqIdCounter;
       const message = { ...payload, req_id: reqId };
 
-      this.pendingRequests.set(reqId, {
+      this.addPending(reqId, {
         resolve: resolve as (data: Record<string, unknown>) => void,
         reject,
       });
@@ -204,7 +223,7 @@ export class DerivWS {
       const reqId = ++this.reqIdCounter;
       const message = { ...payload, subscribe: 1, req_id: reqId };
 
-      this.pendingRequests.set(reqId, {
+      this.addPending(reqId, {
         resolve: (data) => {
           const subscriptionId = this.extractSubscriptionId(data);
           if (subscriptionId) {
@@ -252,7 +271,7 @@ export class DerivWS {
       this.ws.close();
       this.ws = null;
     }
-    this.pendingRequests.clear();
+    this.rejectPending();
     this.subscriptionHandlers.clear();
   }
 

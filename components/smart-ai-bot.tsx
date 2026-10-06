@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 const TYPES = ['DIGITUNDER'];
 type Reply = { proposal?: { id: string; ask_price: number | string }; buy?: { contract_id: number }; proposal_open_contract?: { is_sold: number; profit: number | string }; portfolio?: { contracts: unknown[] } };
 export function SmartAIBot() {
-  const { ws, isConnected, auth } = useDerivWSContext();
+  const { ws, isConnected, auth, balanceSync } = useDerivWSContext();
   const market = useBaseTrading({ ws, isConnected, isAuthenticated: !!auth.wsUrl, contractTypes: TYPES });
   const [stake, setStake] = useState('0.35'), [ticks, setTicks] = useState('1'), [target, setTarget] = useState('2'), [limit, setLimit] = useState('2');
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('Stopped. Press Start to begin.'), [profit, setProfit] = useState(0), [trades, setTrades] = useState(0);
@@ -33,6 +33,7 @@ export function SmartAIBot() {
         const check = await ws.send<Reply>({ proposal_open_contract: 1, contract_id: Number(pending) });
         if (!check.proposal_open_contract?.is_sold) throw Error('A previous bot contract is still open. Wait for settlement before restarting.');
         localStorage.removeItem(key);
+        await balanceSync.refresh();
       }
       const portfolio = await ws.send<Reply>({ portfolio: 1 });
       if (!portfolio.portfolio || portfolio.portfolio.contracts.length) throw Error('Wait until existing account positions close before starting the bot.');
@@ -67,7 +68,8 @@ export function SmartAIBot() {
             total = Math.round((total + pnl) * 100) / 100; count++;
             localStorage.removeItem(key); settled = true;
             if (mounted.current) { setProfit(total); setTrades(count); }
-            say('Contract settled: ' + pnl.toFixed(2) + ' ' + currency);
+            const refreshed = await balanceSync.refresh();
+            say('Contract settled: ' + pnl.toFixed(2) + ' ' + currency + (refreshed ? '. Account balance refreshed.' : '. Balance refresh unavailable; check Deriv account history.'));
             break;
           }
           await new Promise(resolve => setTimeout(resolve, 1200));
@@ -89,7 +91,7 @@ export function SmartAIBot() {
       <p className="text-sm">Account: {auth.activeAccount ? auth.activeAccount.account_type+' · '+accountId : 'Not logged in'}. Settings lock while running.</p>
       <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={busy || !isConnected || !market.activeSymbol}>Start bot</Button>}<Button variant="destructive" onClick={stop} disabled={!busy}>Stop</Button></div>
     </div>
-    <div className="rounded-xl border p-5" aria-live="polite"><p>{message}</p><div className="mt-4 flex gap-8"><span>Trades: <b>{trades}</b></span><span>Net profit: <b>{profit.toFixed(2)} {currency}</b></span></div></div>
+    <div className="rounded-xl border p-5" aria-live="polite"><p>{message}</p><div className="mt-4 flex gap-8"><span>Trades: <b>{trades}</b></span><span>Net profit: <b>{profit.toFixed(2)} {currency}</b></span></div><p className="mt-3 text-sm">Options account balance: {auth.activeAccount?.balance ?? '—'} {currency}</p>{balanceSync.error && <p className="mt-2 text-sm text-amber-500" role="status">{balanceSync.error}</p>}<Button className="mt-3" variant="outline" onClick={() => void balanceSync.refresh()} disabled={!isConnected || !auth.wsUrl}>Refresh balance</Button></div>
     <p className="text-sm text-muted-foreground">Keep this page open. Leaving the page or backgrounding your iPhone stops new purchases. Stop cannot cancel an order already sent. Trading can lose money; targets do not guarantee profit.</p>
   </main>;
 }

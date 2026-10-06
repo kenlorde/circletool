@@ -11,6 +11,7 @@ import { LanguageSwitcher } from '@/components/custom/language-switcher';
 import { Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import type { AuthState, DerivAccount } from '@deriv/core';
+import { useDerivWSContext } from './deriv-ws-provider';
 
 interface HeaderProps {
   authState: AuthState;
@@ -84,6 +85,7 @@ export function Header({
   showAppName,
   actions,
 }: HeaderProps) {
+  const { balanceSync } = useDerivWSContext();
   const { currentLang, localize } = useAppTranslations();
   const numberLocale = LANGUAGE_LOCALES[currentLang];
   const [logoError, setLogoError] = useState(false);
@@ -139,6 +141,7 @@ export function Header({
                   <p className="circletool-account-balance text-base font-bold text-foreground"><span className="sm:hidden" aria-hidden>🇺🇸 </span>
                     {formatBalance(activeAccount.balance, numberLocale)} {activeAccount.currency}
                   </p>
+                  {balanceSync.error && <p className="text-xs text-amber-500" title={balanceSync.error}>Balance not verified</p>}
                 </div>
                 <svg
                   className={cn(
@@ -218,4 +221,3 @@ export function Header({
     </header>
   );
 }
-
