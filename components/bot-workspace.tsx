@@ -54,7 +54,7 @@ export function BotWorkspace() {
     during_purchase: '3. Sell conditions', after_purchase: '4. Restart conditions',
     variables_set: 'Set variable', variables_get: 'Variable',
     math_number: 'Number', logic_boolean: 'Boolean',
-  }[type] ?? type.replace(/_/g, ' '));
+  } as Record<string, string>)[type] ?? type.replace(/_/g, ' ');
   const dirty = !!xml && JSON.stringify([name, xml]) !== savedSnapshot;
   const analysis = useMemo(() => {
     if (!xml) return { blocks: [], error: '', valid: false };
