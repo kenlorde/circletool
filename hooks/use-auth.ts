@@ -360,13 +360,22 @@ export function useAuth(): UseAuthReturn {
   const startAuth = useCallback(async (signUp = false) => {
     if (authActionPending.current) return;
     authActionPending.current = true;
-    const version = sessionVersion.current;
+    const version = ++sessionVersion.current;
+    // Every explicit login begins without the previous user's account or token.
+    coreLogout();
+    activeAccountIdRef.current = null;
+    setAccounts([]);
+    setActiveAccountId(null);
+    setWsUrl(undefined);
     setError(null);
     setAuthState('authenticating');
     try {
       const config = await getAuthConfigWithReferral(currentLang);
       if (version !== sessionVersion.current) return;
       if (!config.clientId) throw new Error('Deriv login is not configured.');
+      const response = await fetch('/api/access-session', { method: 'DELETE', signal: AbortSignal.timeout(10000) });
+      if (version !== sessionVersion.current) return;
+      if (!response.ok) throw new Error('Could not clear the previous account. Please try again.');
       await (signUp ? initiateSignUp(config) : initiateLogin(config));
     } catch (problem) {
       if (version !== sessionVersion.current) return;

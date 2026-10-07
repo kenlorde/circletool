@@ -60,6 +60,10 @@ function appendAttributionParams(params: URLSearchParams, config: AuthConfig): v
  */
 export async function buildAuthorizationUrl(config: AuthConfig): Promise<string> {
   const params = await buildPkceParams(config);
+  // Request fresh authentication rather than silently accepting a provider session.
+  // Deriv controls the UI; these are standard reauthentication request hints.
+  params.set('prompt', 'login');
+  params.set('max_age', '0');
   appendAttributionParams(params, config);
   return `${getAuthBaseUrl()}/auth?${params.toString()}`;
 }
