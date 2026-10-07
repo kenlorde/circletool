@@ -49,8 +49,8 @@ function AccountLabel({ type }: { type: 'demo' | 'real' }) {
   return (
     <span
       className={cn(
-        'text-sm font-medium',
-        type === 'demo' ? 'text-orange-500' : 'text-emerald-600'
+        'inline-flex rounded px-1.5 py-0.5 text-sm font-semibold',
+        type === 'demo' ? 'bg-orange-500/15 text-orange-600' : 'bg-emerald-500/15 text-emerald-600'
       )}
     >
       {type === 'demo' ? (
@@ -159,7 +159,7 @@ export function Header({
             </PopoverTrigger>
             <PopoverContent align="end" className="z-[100] w-64 p-2">
               <div className="space-y-1">
-                {accounts.map((account) => (
+                {[...accounts].sort((a, b) => Number(b.account_type === 'real') - Number(a.account_type === 'real')).map((account) => (
                   <button
                     key={account.account_id}
                     onClick={() => {
@@ -174,6 +174,7 @@ export function Header({
                     )}
                   >
                     <AccountLabel type={account.account_type} />
+                    <p className="mt-1 text-xs text-muted-foreground">{account.account_id}{account.account_id === activeAccount.account_id ? ' · Selected' : ''}</p>
                     <p className="text-base font-bold text-foreground">
                       {formatBalance(account.balance, numberLocale)} {account.currency}
                     </p>

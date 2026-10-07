@@ -397,7 +397,7 @@
 /* Compact mobile composition based on the supplied screen recording. */
 @media (max-width: 639px) {
   .circletool-header { height: 60px; padding: 8px 12px; }
-  .circletool-account-summary > span { display: none; }
+  .circletool-account-summary > span { display: inline-flex; font-size: 11px; line-height: 14px; }
   .circletool-account-balance { color: #45b6a6; font-size: 12px; }
   .circletool-account-balance > span { font-size: 20px; vertical-align: middle; margin-right: 5px; }
   .circletool-header button:has(.circletool-account-summary) { padding: 6px 4px; border: 0; }

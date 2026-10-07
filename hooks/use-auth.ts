@@ -179,6 +179,7 @@ export function useAuth(): UseAuthReturn {
       if (fetchedAccounts.length > 0) {
         const selectedAccount =
           fetchedAccounts.find(account => account.account_id === preferredAccountId) ??
+          fetchedAccounts.find(account => account.account_type === 'real') ??
           fetchedAccounts[0];
         setActiveLoginId(selectedAccount.account_id);
         setAccountType(selectedAccount.account_type);
