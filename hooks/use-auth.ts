@@ -162,6 +162,7 @@ export function useAuth(): UseAuthReturn {
   const initRef = useRef(false);
   const sessionVersion = useRef(0);
   const authActionPending = useRef(false);
+  const loginRedirectPending = useRef(false);
   const activeAccountIdRef = useRef<string | null>(null);
   const tabHiddenAtRef = useRef<number | null>(null);
 
@@ -354,6 +355,43 @@ export function useAuth(): UseAuthReturn {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [authState, fetchOTPUrl]);
 
+  // iPhone's external browser can return without an OAuth callback. Restore
+  // the login button instead of leaving the original page permanently busy.
+  useEffect(() => {
+    if (authState !== 'authenticating' || !authActionPending.current) return;
+    let leftPage = false;
+    const recoverInterruptedLogin = () => {
+      if (!loginRedirectPending.current || !authActionPending.current) return;
+      const params = new URL(window.location.href).searchParams;
+      if (params.has('code') || params.has('error')) return;
+      loginRedirectPending.current = false;
+      loginRedirectPending.current = false;
+      authActionPending.current = false;
+      setAuthState('unauthenticated');
+      setError('Deriv has not returned a completed connection. If you have signed in to the correct account, tap Log in again to connect it.');
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') leftPage = true;
+      else if (leftPage) recoverInterruptedLogin();
+    };
+    const onBlur = () => { leftPage = true; };
+    const onFocus = () => { if (leftPage) recoverInterruptedLogin(); };
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) recoverInterruptedLogin(); };
+    // Some embedded iPhone browsers send no focus/visibility event on dismissal.
+    const timer = setTimeout(recoverInterruptedLogin, 30000);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [authState]);
+
   // Phase 1: Initiate login — includes partner attribution params, resolving a
   // fresh per-user Scaleo token via the BFF proxy when needed (non-blocking).
   // Forwards `lang` so Deriv's home app continues in the selected language (#559).
@@ -376,9 +414,11 @@ export function useAuth(): UseAuthReturn {
       const response = await fetch('/api/access-session', { method: 'DELETE', signal: AbortSignal.timeout(10000) });
       if (version !== sessionVersion.current) return;
       if (!response.ok) throw new Error('Could not clear the previous account. Please try again.');
+      loginRedirectPending.current = true;
       await (signUp ? initiateSignUp(config) : initiateLogin(config));
     } catch (problem) {
       if (version !== sessionVersion.current) return;
+      loginRedirectPending.current = false;
       authActionPending.current = false;
       setAuthState('unauthenticated');
       setError(problem instanceof Error ? problem.message : 'Could not open Deriv login. Please try again.');
@@ -390,6 +430,7 @@ export function useAuth(): UseAuthReturn {
   // Invalidate unfinished auth/account requests before clearing the session.
   const logout = useCallback(() => {
     sessionVersion.current += 1;
+    loginRedirectPending.current = false;
     authActionPending.current = true;
     activeAccountIdRef.current = null;
     coreLogout();

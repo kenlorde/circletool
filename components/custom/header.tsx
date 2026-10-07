@@ -204,7 +204,7 @@ export function Header({
           </Button>
         ) : (
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onLogin} disabled={isAuthenticating}>
+            <Button className="border-red-600 bg-red-600 text-white hover:bg-red-700 hover:text-white" variant="outline" size="sm" onClick={onLogin} disabled={isAuthenticating}>
               {isAuthenticating ? (
                 <Localize i18n_default_text="Logging in..." />
               ) : (

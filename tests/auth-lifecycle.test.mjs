@@ -8,7 +8,7 @@ const start = source.indexOf('async (signUp = false) =>');
 const action = stripTypeScriptTypes('const startAuth = ' + source.slice(start, source.indexOf('}, [currentLang]);', start) + 1) + '; globalThis.startAuth = startAuth;');
 function setup(resolveConfig) {
   const states = [], redirects = [];
-  const context = { coreLogout:()=>redirects.push('clear'), activeAccountIdRef:{current:null}, setAccounts(){},setActiveAccountId(){},setWsUrl(){}, fetch:async()=>({ok:true}), AbortSignal, authActionPending: { current: false }, sessionVersion: { current: 0 }, currentLang: 'en',
+  const context = { loginRedirectPending:{current:false}, coreLogout:()=>redirects.push('clear'), activeAccountIdRef:{current:null}, setAccounts(){},setActiveAccountId(){},setWsUrl(){}, fetch:async()=>({ok:true}), AbortSignal, authActionPending: { current: false }, sessionVersion: { current: 0 }, currentLang: 'en',
     setError() {}, setAuthState: value => states.push(value), getAuthConfigWithReferral: resolveConfig,
     initiateLogin: async () => redirects.push('login'), initiateSignUp: async () => redirects.push('signup') };
   vm.createContext(context); vm.runInContext(action, context);
@@ -49,7 +49,7 @@ const logoutStart = source.indexOf('  const logout = useCallback(() => {');
 const logoutCode = stripTypeScriptTypes('const logout = () => {' + source.slice(logoutStart + '  const logout = useCallback(() => {'.length, source.indexOf('\n  }, []);', logoutStart)) + '\n}; globalThis.logout = logout;');
 test('logout clears local session immediately and waits for cookie removal before navigation', async () => {
   const events = []; let finish;
-  const context = { sessionVersion: {current:0}, authActionPending:{current:false}, activeAccountIdRef:{current:'real'},
+  const context = { loginRedirectPending:{current:false}, sessionVersion: {current:0}, authActionPending:{current:false}, activeAccountIdRef:{current:'real'},
     coreLogout:()=>events.push('clear'), cleanupUrl(){}, getAuthConfig:()=>({redirectUri:'https://circletool.pro'}),
     setAccounts(){},setActiveAccountId(){},setWsUrl(){},setAuthState(){},setError(){},
     AbortSignal, fetch:()=>new Promise(resolve=>{finish=resolve;}),window:{location:{replace:path=>events.push(path)}} };
@@ -65,4 +65,16 @@ test('login does not redirect if the previous server session cannot be cleared',
   assert.deepEqual(flow.redirects,['clear']);
   assert.equal(flow.context.authActionPending.current,false);
   assert.equal(flow.states.at(-1),'unauthenticated');
+});
+const recoveryStart=source.indexOf('    const recoverInterruptedLogin = () => {');
+const recoveryEnd=source.indexOf('\n    const onVisibility',recoveryStart);
+const recoveryCode=stripTypeScriptTypes(source.slice(recoveryStart,recoveryEnd)+';globalThis.recover=recoverInterruptedLogin;');
+for(const callback of [false,true]) test(callback ? 'an incoming callback is not interrupted by recovery' : 'returning without a callback releases the login button',()=>{
+  const states=[],errors=[];
+  const context={loginRedirectPending:{current:true},authActionPending:{current:true},URL,
+    window:{location:{href:callback?'https://circletool.pro/?code=test&state=test':'https://circletool.pro/login'}},
+    setAuthState:v=>states.push(v),setError:v=>errors.push(v)};
+  vm.createContext(context);vm.runInContext(recoveryCode,context);context.recover();
+  assert.equal(context.authActionPending.current,callback);
+  assert.equal(states.length,callback?0:1);assert.equal(errors.length,callback?0:1);
 });
