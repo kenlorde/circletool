@@ -181,6 +181,20 @@ export function Header({
                   </button>
                 ))}
               </div>
+              <div className="mt-2 border-t border-border pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setAccountSwitcherOpen(false);
+                    setMobileMenuOpen(false);
+                    onLogout();
+                  }}
+                >
+                  <Localize i18n_default_text="Log out" />
+                </Button>
+              </div>
             </PopoverContent>
           </Popover>
         )}
