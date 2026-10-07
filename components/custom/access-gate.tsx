@@ -22,8 +22,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
-    setVerified(false);
-    if (!eligible) { setChecking(false); return; }
+    if (!eligible) { setVerified(false); setChecking(false); setError(''); return; }
     const verify = async () => {
       setChecking(true);
       try {
@@ -32,8 +31,8 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
         const response = await fetch('/api/access-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: info.access_token }), signal: controller.signal });
         if (!response.ok) throw new Error('Unable to verify access. Please try again or log in again.');
         if (!cancelled) { setVerified(true); setError(''); }
-      } catch (problem) {
-        if (!cancelled) { setVerified(false); setError(problem instanceof Error ? problem.message : 'Please try again.'); }
+      } catch {
+        if (!cancelled) { setVerified(false); setError('You are signed in, but access to protected services could not be refreshed. Please retry.'); }
       } finally { if (!cancelled) setChecking(false); }
     };
     void verify();
@@ -41,18 +40,27 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; controller.abort(); clearInterval(timer); };
   }, [eligible, retry]);
   useEffect(() => {
-    if (!verified || !eligible || pathname !== '/login') return;
+    if (!verified || auth.authState !== 'authenticated' || pathname !== '/login') return;
     const next = new URLSearchParams(window.location.search).get('next');
     const target = next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') && !next.startsWith('/login') ? next : '/dashboard';
     router.replace(target);
-  }, [verified, eligible, pathname, router]);
-  if (verified && eligible && pathname !== '/login') return children;
-  const busy = checking || auth.authState === 'authenticating' || (auth.authState === 'authenticated' && !auth.wsUrl);
+  }, [verified, auth.authState, pathname, router]);
+  // The provider owns login status. The cookie refresh protects server APIs;
+  // failure of that secondary check must not relabel a logged-in user as logged out.
+  if (auth.authState === 'authenticated' && pathname !== '/login') return <>
+    {children}
+    {error && <div role="status" className="fixed bottom-20 left-4 right-4 z-40 rounded-lg border bg-background p-3 text-sm">{error} <button className="underline" disabled={checking} onClick={() => setRetry(value => value + 1)}>{checking ? 'Retrying…' : 'Retry'}</button></div>}
+  </>;
+  const busy = auth.authState === 'authenticating' || auth.authState === 'authenticated';
   async function start(signUp = false) {
     setError('');
     try { await (signUp ? auth.signUp() : auth.login()); }
     catch { setError('Could not open Deriv login. Please try again.'); }
   }
+  if (busy) return <main className="circle-access">
+    <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={() => start()} onSignUp={() => start(true)} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} appName="Circletool" />
+    <section className="access-card" role="status" aria-live="polite"><h1>{auth.authState === 'authenticated' ? 'You’re signed in.' : 'Restoring your session…'}</h1><p>{error || 'Please wait while Circletool connects to your account.'}</p>{error && <button className="access-login" disabled={checking} onClick={() => setRetry(value => value + 1)}>{checking ? 'Retrying…' : 'Retry connection'}</button>}</section>
+  </main>;
   return <main className="circle-access">
     <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={() => start()} onSignUp={() => start(true)} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} appName="Circletool" />
     <nav className="access-nav" aria-label="Circletool sections">{sections.map(([href, name]) => <Link href={href} key={href}>{name} <LockKeyhole size={13} aria-hidden /></Link>)}</nav>
