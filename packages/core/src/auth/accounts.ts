@@ -31,7 +31,7 @@ export async function fetchAccounts(
   storeDerivAccounts(accounts);
 
   if (accounts.length > 0) {
-    const firstAccount = accounts[0];
+    const firstAccount = accounts.find(account => account.account_type === 'real') ?? accounts[0];
     setActiveLoginId(firstAccount.account_id);
     setAccountType(firstAccount.account_type);
   }

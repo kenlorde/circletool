@@ -265,9 +265,15 @@ export function useDigitsTrading({
     proposalParams ? { ...proposalParams, contractType: firstMode } : null);
   const { proposal: secondProposal } = useProposal(tradingWs, tradingIsConnected,
     proposalParams ? { ...proposalParams, contractType: secondMode } : null);
-  const settingsKey = JSON.stringify([proposalParams, tradeType, isAuthenticated]);
-  const currentSettings = useRef({ key: settingsKey, ws: tradingWs, connected: tradingIsConnected });
-  currentSettings.current = { key: settingsKey, ws: tradingWs, connected: tradingIsConnected };
+  // Direction buttons select a mode and purchase it in the same tap. The
+  // explicit purchase mode is authoritative; that selection must not invalidate
+  // its own quote request. All other settings and the account socket still lock.
+  const settingsKey = JSON.stringify([
+    proposalParams ? { ...proposalParams, contractType: undefined } : null,
+    tradeType, isAuthenticated,
+  ]);
+  const currentSettings = useRef({ key: settingsKey, mode: contractMode, ws: tradingWs, connected: tradingIsConnected });
+  currentSettings.current = { key: settingsKey, mode: contractMode, ws: tradingWs, connected: tradingIsConnected };
   const purchaseLock = useRef(false);
   const modeProposals = { [firstMode]: firstProposal, [secondMode]: secondProposal };
   const buyContract = useCallback(async (mode?: ContractMode) => {
@@ -291,7 +297,8 @@ export function useDigitsTrading({
           ...(!['DIGITEVEN', 'DIGITODD'].includes(requestedMode) ? { barrier: selectedDigit } : {}),
         });
         const current = currentSettings.current;
-        if (current.key !== requestKey || current.ws !== requestWs || !current.connected) {
+        if (current.key !== requestKey || current.ws !== requestWs || !current.connected ||
+            (!mode && current.mode !== requestedMode)) {
           throw new Error('Trade settings or connection changed. Review the quote and tap Buy again.');
         }
         const fresh = response.proposal;
