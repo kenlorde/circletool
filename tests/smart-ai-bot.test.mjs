@@ -47,13 +47,15 @@ test('recorded open purchase is reconciled when restarting after settlement',asy
  await b.start();assert.equal(b.transactions[0].status,'won');assert.equal(b.transactions[0].profit,.1);assert.equal(b.transactions[0].contractId,123);
 });
 
-test('a losing trade waits for a new digit 8 without an added loss pause', async () => {
+test('after initial digit 8, later purchases continue without waiting for another entry', async () => {
   let settlements = 0; const delays = [];
   const b = bot('7', {current:false}, async p => p.proposal_open_contract ? {proposal_open_contract:{is_sold:1,profit: ++settlements === 1 ? -.35 : .5}} : reply(p));
+  let entries=0; b.context.waitForDigitEight=async()=>{entries++; return 100;};
   b.context.setTimeout = (fn, ms) => { delays.push(ms); fn(); };
   await b.start();
   assert.equal(b.calls.filter(p=>p.buy).length,2);
   assert.deepEqual(delays,[1000,1000]);
+  assert.equal(entries,1);
 });
 
 test('no entry tick means no proposal or buy', async () => {

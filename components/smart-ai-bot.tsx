@@ -48,17 +48,15 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
       if (!running.current || !mounted.current) return;
       setProfit(0); setTrades(0); setResults({ wins: 0, losses: 0, drawdown: 0 });
       const symbol = market.activeSymbol.underlying_symbol;
-      let triggerEpoch = market.currentTick?.epoch ?? 0;
+      say('Waiting for the cursor to touch digit 8 before the first purchase…');
+      const entryEpoch = await waitForDigitEight(ws, symbol, market.pipSize, market.currentTick?.epoch ?? 0, () => running.current && mounted.current);
+      if (!ws.isConnected) throw Error('Disconnected while waiting for digit 8. Stopped.');
+      if (entryEpoch === null || !running.current || !mounted.current) return;
       while (running.current && mounted.current) {
         if (total >= goal) { say('Profit target reached. Stopped.'); break; }
         if (total <= -loss || amount > loss + total + 0.000001) { say('Loss limit reached, or remaining allowance is below the stake. Stopped.'); break; }
         if (!ws.isConnected) throw Error('Disconnected. Stopped; no automatic restart.');
-        say('Waiting for the cursor to touch digit 8…');
-        const entryEpoch = await waitForDigitEight(ws, symbol, market.pipSize, triggerEpoch, () => running.current && mounted.current);
-        if (!ws.isConnected) throw Error('Disconnected while waiting for digit 8. Stopped.');
-        if (entryEpoch === null || !running.current || !mounted.current) break;
-        triggerEpoch = entryEpoch;
-        say('Digit 8 detected. Requesting Under '+barrier+' quote…');
+        say('Requesting Under '+barrier+' quote…');
         const quote = await ws.send<Reply>({ proposal: 1, amount, basis: 'stake', contract_type: 'DIGITUNDER', currency, duration, duration_unit: 't', underlying_symbol: symbol, barrier });
         if (!running.current || !mounted.current) break;
         const p = quote.proposal, price = Number(p?.ask_price);
@@ -102,9 +100,9 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
   }
   return <section className="space-y-5 rounded-2xl border p-4 sm:p-6" aria-label={botName}>
     <h2 className="text-2xl font-bold">{botName} · Under {barrier} bot</h2>
-    <p className="text-muted-foreground">Digit Under {barrier} wins on {barrier === '8' ? '0–7' : '0–6'} and loses on {barrier === '8' ? '8–9' : '7–9'}. Your chosen stake, one contract at a time. Entry trigger: digit 8. Start arms the bot; each purchase waits for a new live digit 8. This bot does not predict digits.</p>
+    <p className="text-muted-foreground">Digit Under {barrier} wins on {barrier === '8' ? '0–7' : '0–6'} and loses on {barrier === '8' ? '8–9' : '7–9'}. Your chosen stake, one contract at a time. Entry trigger: digit 8. Start arms the bot; only the first purchase waits for a live digit 8. Later purchases continue after settlement. This bot does not predict digits.</p>
     <div className="rounded-xl border p-4" aria-label="Live last digit">
-      <p className="mb-3 text-sm">Entry trigger: cursor on 8 · Last digit: {market.currentTick ? getLastDigit(market.currentTick.quote, market.pipSize) : '—'}</p>
+      <p className="mb-3 text-sm">First entry: cursor on 8 · Last digit: {market.currentTick ? getLastDigit(market.currentTick.quote, market.pipSize) : '—'}</p>
       <div className="grid grid-cols-10 gap-1">{Array.from({ length: 10 }, (_, digit) => <span key={digit} className={'rounded-md border py-2 text-center font-bold ' + (market.currentTick && getLastDigit(market.currentTick.quote, market.pipSize) === digit ? 'bg-primary text-primary-foreground' : digit === 8 ? 'border-primary text-primary' : '')}>{digit}</span>)}</div>
     </div>
     <div className="rounded-xl border p-5 space-y-4">
