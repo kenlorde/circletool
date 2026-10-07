@@ -15,6 +15,7 @@ export async function fetchAccounts(
   clientId: string
 ): Promise<DerivAccount[]> {
   const response = await fetch(`${getApiBaseUrl()}/accounts`, {
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${authInfo.access_token}`,
       'Deriv-App-ID': clientId,
@@ -49,6 +50,7 @@ export async function getWebSocketOTP(
 ): Promise<string> {
   const response = await fetch(`${getApiBaseUrl()}/accounts/${accountId}/otp`, {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${authInfo.access_token}`,
       'Deriv-App-ID': clientId,

@@ -21,6 +21,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
   const eligible = auth.authState === 'authenticated' && !!auth.wsUrl;
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     setVerified(false);
     if (!eligible) { setChecking(false); return; }
     const verify = async () => {
@@ -28,7 +29,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
       try {
         const info = getAuthInfo();
         if (!info?.access_token) throw new Error('Your session expired. Please log in again.');
-        const response = await fetch('/api/access-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: info.access_token }) });
+        const response = await fetch('/api/access-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: info.access_token }), signal: controller.signal });
         if (!response.ok) throw new Error('Unable to verify access. Please try again or log in again.');
         if (!cancelled) { setVerified(true); setError(''); }
       } catch (problem) {
@@ -37,7 +38,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
     };
     void verify();
     const timer = setInterval(() => { void verify(); }, 300000);
-    return () => { cancelled = true; clearInterval(timer); };
+    return () => { cancelled = true; controller.abort(); clearInterval(timer); };
   }, [eligible, retry]);
   useEffect(() => {
     if (!verified || !eligible || pathname !== '/login') return;

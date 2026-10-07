@@ -16,7 +16,7 @@ for (const [name, accounts, preferred, expected] of [
 ]) {
   test(name, async () => {
     const selected = {};
-    const context = { fetchAccounts: async () => accounts, getAuthConfig: () => ({clientId: 'test'}),
+    const context = { sessionVersion: { current: 0 }, clearAllAuthData() {}, fetchAccounts: async () => accounts, getAuthConfig: () => ({clientId: 'test'}),
       setAccounts() {}, setActiveLoginId: id => selected.storedId = id,
       setAccountType: type => selected.type = type, setActiveAccountId: id => selected.id = id,
       fetchOTPUrl: async id => { selected.otpAccount = id; return 'wss://test'; }, setWsUrl() {}, setAuthState() {} };
@@ -24,5 +24,25 @@ for (const [name, accounts, preferred, expected] of [
     await context.completeAuth({}, preferred);
     assert.equal(selected.id, expected.account_id); assert.equal(selected.type, expected.account_type);
     assert.equal(selected.otpAccount, expected.account_id); assert.equal(selected.storedId, expected.account_id);
+  });
+}
+
+for (const stage of ['accounts', 'otp']) {
+  test(`logout during ${stage} request cannot restore an authenticated session`, async () => {
+    let resolvePending;
+    const sessionVersion = { current: 0 };
+    const writes = [];
+    const context = { sessionVersion, clearAllAuthData: () => writes.push('clear'),
+      fetchAccounts: () => stage === 'accounts' ? new Promise(resolve => { resolvePending = resolve; }) : Promise.resolve([real]),
+      getAuthConfig: () => ({clientId: 'test'}), setAccounts() {}, setActiveLoginId() {}, setAccountType() {}, setActiveAccountId() {},
+      fetchOTPUrl: () => new Promise(resolve => { resolvePending = resolve; }),
+      setWsUrl: () => writes.push('socket'), setAuthState: () => writes.push('authenticated') };
+    vm.createContext(context); vm.runInContext(completion + '\nglobalThis.completeAuth = completeAuth;', context);
+    const task = context.completeAuth({});
+    while (!resolvePending) await Promise.resolve();
+    sessionVersion.current++;
+    resolvePending(stage === 'accounts' ? [real] : 'wss://test');
+    await task;
+    assert.deepEqual(writes, ['clear']);
   });
 }

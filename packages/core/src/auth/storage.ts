@@ -61,12 +61,14 @@ export function storeAuthInfo(authInfo: AuthInfo): void {
   localStorage.setItem(AUTH_INFO_KEY, JSON.stringify(authInfo));
 }
 
-export function getAuthInfo(): AuthInfo | null {
+export function getAuthInfo(allowExpired = false): AuthInfo | null {
   const raw = localStorage.getItem(AUTH_INFO_KEY);
   if (!raw) return null;
 
-  const authInfo: AuthInfo = JSON.parse(raw);
-  if (authInfo.expires_at && Date.now() > authInfo.expires_at * 1000) {
+  let authInfo: AuthInfo;
+  try { authInfo = JSON.parse(raw); } catch { clearAuthInfo(); return null; }
+  if (!authInfo || typeof authInfo.access_token !== "string") { clearAuthInfo(); return null; }
+  if (!allowExpired && authInfo.expires_at && Date.now() > authInfo.expires_at * 1000) {
     return null; // Token expired
   }
   return authInfo;

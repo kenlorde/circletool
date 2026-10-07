@@ -16,6 +16,7 @@ import {
   setActiveLoginId,
   setAccountType,
   clearAllAuthData,
+  cleanupUrl,
   parseReferralLink,
   parseLandingParams,
   resolveReferralViaProxy,
@@ -159,6 +160,8 @@ export function useAuth(): UseAuthReturn {
   const [wsUrl, setWsUrl] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const initRef = useRef(false);
+  const sessionVersion = useRef(0);
+  const authActionPending = useRef(false);
   const activeAccountIdRef = useRef<string | null>(null);
   const tabHiddenAtRef = useRef<number | null>(null);
 
@@ -173,7 +176,10 @@ export function useAuth(): UseAuthReturn {
   // Complete auth: fetch accounts → get OTP → set WS URL
   const completeAuth = useCallback(
     async (authInfo: AuthInfo, preferredAccountId?: string | null) => {
+      const version = sessionVersion.current;
       const fetchedAccounts = await fetchAccounts(authInfo, getAuthConfig().clientId);
+      if (version !== sessionVersion.current) { clearAllAuthData(); return; }
+      if (!fetchedAccounts.length) throw new Error("No trading accounts are available. Please log in again.");
       setAccounts(fetchedAccounts);
 
       if (fetchedAccounts.length > 0) {
@@ -186,6 +192,7 @@ export function useAuth(): UseAuthReturn {
         setActiveAccountId(selectedAccount.account_id);
 
         const otpUrl = await fetchOTPUrl(selectedAccount.account_id, authInfo);
+        if (version !== sessionVersion.current) { clearAllAuthData(); return; }
         setWsUrl(otpUrl);
       }
 
@@ -199,6 +206,7 @@ export function useAuth(): UseAuthReturn {
   // reconciles any staleness as soon as the socket connects.
   const restoreCachedSession = useCallback(
     async (authInfo: AuthInfo): Promise<boolean> => {
+      const version = sessionVersion.current;
       const cachedAccounts = getDerivAccounts();
       const loginId = getActiveLoginId() ?? cachedAccounts?.[0]?.account_id;
       if (!cachedAccounts || cachedAccounts.length === 0 || !loginId) return false;
@@ -211,6 +219,7 @@ export function useAuth(): UseAuthReturn {
       setActiveAccountId(loginId);
       try {
         const otpUrl = await fetchOTPUrl(loginId, authInfo);
+        if (version !== sessionVersion.current) { clearAllAuthData(); return false; }
         setWsUrl(otpUrl);
         setAuthState('authenticated');
         return true;
@@ -227,16 +236,21 @@ export function useAuth(): UseAuthReturn {
     initRef.current = true;
 
     const init = async () => {
+      const version = sessionVersion.current;
       const url = new URL(window.location.href);
       const code = url.searchParams.get('code');
 
       // Phase 3-5: Handle OAuth callback
-      if (code) {
+      if (code || url.searchParams.has('error')) {
         setAuthState('authenticating');
         try {
           const authInfo = await handleOAuthCallback(window.location.href, getAuthConfig());
+          if (version !== sessionVersion.current) { clearAllAuthData(); return; }
           await completeAuth(authInfo);
         } catch (err) {
+          if (version !== sessionVersion.current) return;
+          cleanupUrl(getAuthConfig().redirectUri);
+          setAccounts([]); setActiveAccountId(null); setWsUrl(undefined);
           setError(err instanceof Error ? err.message : 'Authentication failed');
           setAuthState('error');
           clearAllAuthData();
@@ -245,8 +259,9 @@ export function useAuth(): UseAuthReturn {
       }
 
       // Check for existing session
-      const storedAuth = getAuthInfo();
+      const storedAuth = getAuthInfo(true);
       if (storedAuth) {
+        setAuthState('authenticating');
         // Check if token is expired
         if (storedAuth.expires_at && Date.now() / 1000 > storedAuth.expires_at) {
           let refreshed: AuthInfo;
@@ -256,18 +271,21 @@ export function useAuth(): UseAuthReturn {
               getAuthConfig().clientId
             );
           } catch {
+            if (version !== sessionVersion.current) return;
             // Refresh failed (token revoked/expired) — fall back to
             // unauthenticated (public WS)
             clearAllAuthData();
             setAuthState('unauthenticated');
             return;
           }
+          if (version !== sessionVersion.current) { clearAllAuthData(); return; }
           try {
             await completeAuth(refreshed, getActiveLoginId());
           } catch {
             // Same resilience as the valid-session path: a transient fetch
             // failure after a successful refresh keeps the session alive on
             // the cached snapshot instead of forcing a logout.
+            if (version !== sessionVersion.current) return;
             if (!(await restoreCachedSession(refreshed))) {
               clearAllAuthData();
               setAuthState('unauthenticated');
@@ -283,6 +301,7 @@ export function useAuth(): UseAuthReturn {
         } catch {
           // Fresh fetch failed (e.g. transient network error) — keep the
           // session alive on the cached snapshot rather than logging out.
+          if (version !== sessionVersion.current) return;
           if (!(await restoreCachedSession(storedAuth))) {
             clearAllAuthData();
             setAuthState('unauthenticated');
@@ -314,14 +333,17 @@ export function useAuth(): UseAuthReturn {
       if (!hiddenAt || Date.now() - hiddenAt < 30_000) return;
       tabHiddenAtRef.current = null;
 
+      const version = sessionVersion.current;
       const accountId = activeAccountIdRef.current;
       const authInfo = getAuthInfo();
       if (!authInfo || !accountId) return;
 
       try {
         const otpUrl = await fetchOTPUrl(accountId, authInfo);
+        if (version !== sessionVersion.current || accountId !== activeAccountIdRef.current) return;
         setWsUrl(otpUrl);
       } catch {
+        if (version !== sessionVersion.current) return;
         clearAllAuthData();
         setAuthState('unauthenticated');
         setWsUrl(undefined);
@@ -335,30 +357,57 @@ export function useAuth(): UseAuthReturn {
   // Phase 1: Initiate login — includes partner attribution params, resolving a
   // fresh per-user Scaleo token via the BFF proxy when needed (non-blocking).
   // Forwards `lang` so Deriv's home app continues in the selected language (#559).
-  const login = useCallback(async () => {
-    await initiateLogin(await getAuthConfigWithReferral(currentLang));
+  const startAuth = useCallback(async (signUp = false) => {
+    if (authActionPending.current) return;
+    authActionPending.current = true;
+    const version = sessionVersion.current;
+    setError(null);
+    setAuthState('authenticating');
+    try {
+      const config = await getAuthConfigWithReferral(currentLang);
+      if (version !== sessionVersion.current) return;
+      if (!config.clientId) throw new Error('Deriv login is not configured.');
+      await (signUp ? initiateSignUp(config) : initiateLogin(config));
+    } catch (problem) {
+      if (version !== sessionVersion.current) return;
+      authActionPending.current = false;
+      setAuthState('unauthenticated');
+      setError(problem instanceof Error ? problem.message : 'Could not open Deriv login. Please try again.');
+    }
   }, [currentLang]);
+  const login = useCallback(() => startAuth(), [startAuth]);
+  const signUp = useCallback(() => startAuth(true), [startAuth]);
 
-  // Initiate sign-up — adds prompt=registration and partner attribution params
-  const signUp = useCallback(async () => {
-    await initiateSignUp(await getAuthConfigWithReferral(currentLang));
-  }, [currentLang]);
-
-  // Logout: close WS (handled by useDerivWS cleanup), clear storage, reset state
+  // Invalidate unfinished auth/account requests before clearing the session.
   const logout = useCallback(() => {
-    void fetch('/api/access-session', { method: 'DELETE' }).catch(() => {});
+    sessionVersion.current += 1;
+    authActionPending.current = true;
+    activeAccountIdRef.current = null;
     coreLogout();
+    cleanupUrl(getAuthConfig().redirectUri);
     setAccounts([]);
     setActiveAccountId(null);
     setWsUrl(undefined);
     setAuthState('unauthenticated');
     setError(null);
+    // Complete cookie removal before returning to login; a full navigation also
+    // discards cached protected pages and any in-flight component state.
+    void fetch('/api/access-session', { method: 'DELETE', signal: AbortSignal.timeout(10000) })
+      .then(response => {
+        if (!response.ok) throw new Error('Could not finish signing out. Please try again.');
+        window.location.replace('/login');
+      })
+      .catch(problem => {
+        authActionPending.current = false;
+        setError(problem instanceof Error ? problem.message : 'Could not finish signing out. Please try again.');
+      });
   }, []);
 
   // Account switch: fetch new OTP first, then update accountId and wsUrl together
   // so reconnectKey and url change in the same render cycle with the correct OTP.
   const switchAccount = useCallback(
     async (accountId: string) => {
+      const version = sessionVersion.current;
       const authInfo = getAuthInfo();
       if (!authInfo) return;
 
@@ -367,6 +416,7 @@ export function useAuth(): UseAuthReturn {
         if (account) setAccountType(account.account_type);
         // Fetch OTP before updating accountId so reconnectKey and url are consistent
         const otpUrl = await fetchOTPUrl(accountId, authInfo);
+        if (version !== sessionVersion.current) return;
         setActiveLoginId(accountId);
         setActiveAccountId(accountId);
         setWsUrl(otpUrl);
