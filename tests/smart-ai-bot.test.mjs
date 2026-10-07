@@ -10,7 +10,7 @@ function bot(barrier, sessionLock, send, storage = new Map()) {
   const calls = [], state = [], transactions = [];
   const context = { barrier, sessionLock, anotherBotRunning: false, lock: { current: false }, running: { current: false }, mounted: { current: true },
     ws: { isConnected: true, async send(p) { calls.push(p); return send(p); } }, isConnected: true, auth: { authState: 'authenticated' }, accountId: 'test-account',
-    market: { activeSymbol: { underlying_symbol: '1HZ100V' } }, currency: 'USD', stake: '0.35', ticks: '1', target: '0.1', limit: '1',
+    waitForDigitEight: async () => 100, market: { pipSize: 2, activeSymbol: { underlying_symbol: '1HZ100V' } }, currency: 'USD', stake: '0.35', ticks: '1', target: '0.1', limit: '1',
     localStorage: { getItem: k => storage.get(k), setItem: (k,v) => storage.set(k,v), removeItem: k => storage.delete(k) },
     balanceSync: { async refresh() { return true; } }, onRunStateChange: v => state.push(v), setMessage() {}, setQuoteInfo() {}, setResults() {}, setBusy() {}, setProfit() {}, setTrades() {},
     onTransaction: transaction => transactions.push(transaction), readBotTransactions: () => [],
@@ -47,32 +47,23 @@ test('recorded open purchase is reconciled when restarting after settlement',asy
  await b.start();assert.equal(b.transactions[0].status,'won');assert.equal(b.transactions[0].profit,.1);assert.equal(b.transactions[0].contractId,123);
 });
 
-test('unfavourable payout is skipped; a later favourable quote can buy', async () => {
-  let quotes = 0;
-  const b = bot('7', {current:false}, async p => p.proposal && ++quotes === 1 ? {proposal:{id:'bad',ask_price:.35,payout:.45}} : reply(p));
-  await b.start();
-  assert.equal(quotes, 2);
-  assert.equal(b.calls.filter(p => p.buy).length, 1);
-  assert.equal(b.calls.find(p => p.buy).buy, 'q');
-});
-test('missing payout fails closed without buying', async () => {
-  const b = bot('8', {current:false}, async p => p.proposal ? {proposal:{id:'q',ask_price:.35}} : reply(p));
-  await b.start();
-  assert.equal(b.calls.filter(p=>p.buy).length,0);
-  assert.equal(b.context.sessionLock.current,false);
-});
-test('Stop during skipped-quote check prevents the next quote and purchase', async () => {
-  const b = bot('7', {current:false}, async p => p.proposal ? {proposal:{id:'bad',ask_price:.35,payout:.4}} : reply(p));
-  b.context.setTimeout = fn => { b.context.running.current=false; fn(); };
-  await b.start();
-  assert.equal(b.calls.filter(p=>p.proposal).length,1);
-  assert.equal(b.calls.filter(p=>p.buy).length,0);
-});
-test('a losing trade does not add a loss pause or prevent the next qualifying purchase', async () => {
+test('a losing trade waits for a new digit 8 without an added loss pause', async () => {
   let settlements = 0; const delays = [];
   const b = bot('7', {current:false}, async p => p.proposal_open_contract ? {proposal_open_contract:{is_sold:1,profit: ++settlements === 1 ? -.35 : .5}} : reply(p));
   b.context.setTimeout = (fn, ms) => { delays.push(ms); fn(); };
   await b.start();
   assert.equal(b.calls.filter(p=>p.buy).length,2);
   assert.deepEqual(delays,[1000,1000]);
+});
+
+test('no entry tick means no proposal or buy', async () => {
+ const b=bot('7',{current:false},async p=>reply(p));
+ b.context.waitForDigitEight=async()=>null;
+ await b.start();assert.equal(b.calls.filter(p=>p.proposal||p.buy).length,0);
+});
+
+test('original bot buys after digit 8 without applying payout screening', async () => {
+ const b=bot('8',{current:false},async p=>p.proposal ? {proposal:{id:'original',ask_price:.35}} : reply(p));
+ let entries=0;b.context.waitForDigitEight=async()=>{entries++;return 100;};
+ await b.start();assert.equal(entries,1);assert.equal(b.calls.find(p=>p.buy).buy,'original');
 });
