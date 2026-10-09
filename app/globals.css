@@ -469,3 +469,26 @@
 .mobile-contract-tick strong > span { display: inline-grid; place-items: center; min-width: 27px; height: 27px; margin-left: 3px; border-radius: 50%; background: #009f97; color: white; }
 .mobile-contract-tick.contract-lost strong > span { background: #c43647; }
 .mobile-risk-button { padding: 4px 7px; border-width: 1px; font-size: 11px; line-height: 1.3; border-radius: 3px; }
+
+/* Digits Lab appearance for the existing Over/Under controls only.
+   Tick feed, cursor position, prediction state and purchase handlers are unchanged. */
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-digit-grid {
+  --digit-size: min(16vw, 60px);
+  gap: 22px 5px;
+  max-width: 410px;
+}
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-digit { padding: 6px; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-digit strong { font-size: 18px; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-digit small { font-size: 12px; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-digit.latest:not(.contract-won):not(.contract-lost) { background: var(--digit-ring) !important; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-digit:not(.contract-won):not(.contract-lost) > span { background: #0d0e0f; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-digit.selected:not(.contract-won):not(.contract-lost) > span { background: #292b52; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-prediction { gap: 8px; padding: 9px; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-prediction button { height: 38px; border-radius: 3px; background: #151819; color: #c5c9cc; font-size: 18px; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-prediction button[aria-pressed="true"] { background: #303536; color: #fff; font-weight: 800; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction { gap: 7px; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction button { border-color: transparent; border-radius: 4px; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction button.up { background: #009f95; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction button.down { background: #c42238; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction button > span { min-height: 42px; font-size: 16px; }
+.mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction button small { min-height: 38px; padding: 12px; font-size: 10px; }
