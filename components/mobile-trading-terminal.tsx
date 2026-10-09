@@ -159,7 +159,6 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
             <span className="mobile-market-subquote">{currentTick ? Number(currentTick.quote).toFixed(pipSize) : 'Waiting for ticks…'} <span>▲</span></span>
           </div>
         </div>
-        <p className="mobile-stats-caption">Last digit stats for latest {digitStats.totalTicks} ticks{activeSymbol ? ` for ${activeSymbol.underlying_symbol_name}` : ''}</p>
         {result && <div className={`mobile-contract-tick ${resultClass}`} role="status">
           Tick {result.ticks} - <strong>{result.price.slice(0, -1)}<span>{result.digit}</span></strong>
         </div>}
