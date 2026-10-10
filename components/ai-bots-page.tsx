@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Search, Bot, ArrowLeft } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Header } from '@/components/custom/header';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
@@ -20,6 +21,8 @@ export function AIBotsPage() {
   const logoSrc = useLogoSrc();
   const sessionLock = useRef(false);
   const pageRef = useRef<HTMLElement>(null);
+  const [showRealLogin, setShowRealLogin] = useState(false);
+  const loadButton = useRef<HTMLButtonElement | null>(null);
   const [running, setRunning] = useState(false);
   const [selected, setSelected] = useState<(typeof bots)[number] | null>(null);
   const accountId = auth.activeAccount?.account_id;
@@ -48,6 +51,13 @@ export function AIBotsPage() {
   const visible = bots.filter(bot => (category !== 'new' || bot.isNew) && `${bot.name} Under ${bot.barrier}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <main ref={pageRef} className={styles.page}>
     <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={auth.login} onSignUp={auth.signUp} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} appName="Circletool" />
+    <Dialog open={showRealLogin} onOpenChange={setShowRealLogin}>
+      <DialogContent className="w-[calc(100%_-_32px)] max-w-sm rounded-xl border-gray-200 text-center" style={{ backgroundColor: '#ffffff', color: '#111111' }} onCloseAutoFocus={event => { event.preventDefault(); loadButton.current?.focus(); }}>
+        <DialogTitle className="px-4 pt-3 text-xl leading-7">Please log in to your real account</DialogTitle>
+        <DialogDescription className="text-gray-600">A real account is required to load this bot.</DialogDescription>
+        <button className="mt-2 rounded-lg bg-red-600 px-5 py-3 font-semibold text-white hover:bg-red-700" onClick={() => { setShowRealLogin(false); const real = auth.accounts.find(account => account.account_type === 'real'); if (auth.authState === 'authenticated' && real) void auth.switchAccount(real.account_id); else auth.login(); }}>Log in to real account</button>
+      </DialogContent>
+    </Dialog>
     <div className={styles.spacer} />
     <nav className={styles.nav} aria-label="Bot sections"><Link href="/dashboard">Dashboard</Link><Link href="/bot-editor">Bot Builder</Link><span className={styles.current} aria-current="page"><Bot size={21} aria-hidden /> Smart AI</span><Link href="/copy-trading">Copy Trading</Link></nav>
     <div className={styles.content}>
@@ -76,7 +86,7 @@ export function AIBotsPage() {
         <div className={styles.cards}>{visible.map(bot => <article key={bot.id} className={`${styles.card} ${bot.id === 'master' ? styles.master : styles.expert}`}>
           <span className={styles.ribbon}>{bot.ribbon}</span>
           <h2>{bot.name}</h2><p>{bot.description}</p>
-          <div className={styles.cardBottom}><span>{bot.xml ? '3 trade types · editable settings' : 'Fixed stake · one contract at a time'}</span><button onClick={() => setSelected(bot)} aria-label={`Load ${bot.name}`}>Load Bot</button></div>
+          <div className={styles.cardBottom}><span>{bot.xml ? '3 trade types · editable settings' : 'Fixed stake · one contract at a time'}</span><button onClick={event => { loadButton.current = event.currentTarget; if (auth.authState !== 'authenticated' || auth.activeAccount?.account_type !== 'real') { setShowRealLogin(true); return; } setSelected(bot); }} aria-label={`Load ${bot.name}`}>Load Bot</button></div>
         </article>)}</div>
         {!visible.length && <p className={styles.empty} role="status">No bots match your search.</p>}
         <p className={styles.note}>Load a bot to review its settings. Purchases begin only when you press Start. Trading can lose money.</p>
