@@ -54,7 +54,7 @@ export function AIBotsPage() {
       {selected ? <>
         <button className={styles.back} disabled={running} onClick={() => { if (!sessionLock.current) setSelected(null); setView('setup'); }}><ArrowLeft size={18} aria-hidden /> All bots</button>
         <div className={styles.views} aria-label="Bot pages"><button aria-pressed={view === 'setup'} onClick={() => setView('setup')}>Bot settings</button><button aria-pressed={view === 'transactions'} onClick={() => setView('transactions')}>Transactions <span>{botTransactions.length}</span></button></div>
-        <div hidden={view !== 'setup'}>{selected.id === 'smart' ? <SmartAIStrategy /> : <SmartAIBot key={selected.id} barrier={selected.barrier} sessionLock={sessionLock} onRunStateChange={setRunning} onTransaction={recordTransaction} />}</div>
+        <div hidden={view !== 'setup'}>{selected.id === 'smart' ? <SmartAIStrategy sessionLock={sessionLock} onRunStateChange={setRunning} onTransaction={recordTransaction} /> : <SmartAIBot key={selected.id} barrier={selected.barrier} sessionLock={sessionLock} onRunStateChange={setRunning} onTransaction={recordTransaction} />}</div>
         {view === 'setup' && <button className={styles.next} onClick={() => setView('transactions')}>Next: Transactions →</button>}
         {view === 'transactions' && <section className={styles.transactions} aria-labelledby="transaction-title">
           <h1 id="transaction-title">{selected.name} transactions</h1>
@@ -62,7 +62,7 @@ export function AIBotsPage() {
           <div className={styles.summary}><span>Contracts <b>{botTransactions.length}</b></span><span>Wins <b>{botTransactions.filter(x=>x.status === 'won').length}</b></span><span>Losses <b>{botTransactions.filter(x=>x.status === 'lost').length}</b></span>{Object.entries(totals).map(([currency,total]) => <span key={currency}>Net profit <b className={total < 0 ? styles.loss : styles.win}>{total.toFixed(2)} {currency}</b></span>)}</div>
           {storageError && <p role="status">{storageError}</p>}
           {!botTransactions.length ? <p className={styles.empty}>No transactions recorded for this bot yet. New purchases will appear here automatically.</p> : <ol className={styles.transactionList}>{botTransactions.map(x => <li key={x.contractId}>
-            <div className={styles.transactionTop}><strong>Under {x.barrier} · {x.symbol}</strong><span className={x.status === 'lost' ? styles.loss : x.status === 'open' ? '' : styles.win}>{x.status === 'break-even' ? 'Break even' : x.status === 'open' ? 'Open' : x.status === 'won' ? 'Won' : 'Lost'}</span></div>
+            <div className={styles.transactionTop}><strong>{x.contractType === 'CALL' ? 'Rise' : `Under ${x.barrier}`} · {x.symbol}</strong><span className={x.status === 'lost' ? styles.loss : x.status === 'open' ? '' : styles.win}>{x.status === 'break-even' ? 'Break even' : x.status === 'open' ? 'Open' : x.status === 'won' ? 'Won' : 'Lost'}</span></div>
             <small>Contract #{x.contractId} · {new Date(x.purchasedAt).toLocaleString('en-KE',{timeZone:'Africa/Nairobi'})} EAT</small>
             <div className={styles.transactionAmounts}><span>Stake <b>{x.stake.toFixed(2)} {x.currency}</b></span><span>Duration <b>{x.ticks} {x.ticks === 1 ? 'tick' : 'ticks'}</b></span><span>Profit / loss <b className={x.status === 'lost' ? styles.loss : styles.win}>{x.profit === undefined ? 'Pending' : `${x.profit > 0 ? '+' : ''}${x.profit.toFixed(2)} ${x.currency}`}</b></span></div>
           </li>)}</ol>}

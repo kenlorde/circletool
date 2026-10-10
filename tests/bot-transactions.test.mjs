@@ -15,6 +15,15 @@ test('accounts have independent transaction records',()=>{
  storage.clear();saveBotTransaction(row);saveBotTransaction({...row,accountId:'B',botId:'master',barrier:'7'});
  assert.equal(readBotTransactions('A')[0].botId,'expert');assert.equal(readBotTransactions('B')[0].botId,'master');
 });
+test('Smart AI Rise records persist alongside existing digit bots',()=>{
+ storage.clear();saveBotTransaction(row);
+ const smart={...row,botId:'smart',contractType:'CALL',barrier:'',contractId:456};
+ saveBotTransaction(smart);saveBotTransaction({...smart,status:'won',profit:.2,settledAt:101});
+ const rows=readBotTransactions('A');assert.equal(rows.length,2);
+ assert.equal(rows.find(x=>x.botId==='smart').contractType,'CALL');
+ assert.equal(rows.find(x=>x.botId==='smart').profit,.2);
+ assert.equal(rows.find(x=>x.botId==='expert').barrier,'8');
+});
 test('invalid persisted data is rejected and journal caps at 200 newest rows',()=>{
  storage.clear();storage.set('circletool.bot-transactions.v1:A','bad json');assert.deepEqual(readBotTransactions('A'),[]);
  storage.set('circletool.bot-transactions.v1:A',JSON.stringify([{...row,status:'won'},{...row,accountId:'B'}]));assert.deepEqual(readBotTransactions('A'),[]);

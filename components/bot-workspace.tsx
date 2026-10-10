@@ -79,7 +79,7 @@ export function BotWorkspace() {
         parseBotXml(source);
         setXml(source); setName('Smart AI.xml'); setId(null);
         setSavedSnapshot(JSON.stringify(['Smart AI.xml', source]));
-        setStatus('Smart AI loaded. This XML uses Rise/Fall and custom blocks; the current digit runner cannot execute it. You can edit or download the original XML.');
+        setStatus('Smart AI loaded for editing. To run this strategy, open Smart AI from the Free Bots list.');
       })
       .catch(error => { if (!controller.signal.aborted) setStatus(error instanceof Error ? error.message : 'Could not load Smart AI.'); })
       .finally(() => { if (!controller.signal.aborted) setBusy(false); });

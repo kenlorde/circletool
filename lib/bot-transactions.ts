@@ -1,10 +1,11 @@
 export interface BotTransaction {
   accountId: string;
-  botId: 'master' | 'expert';
+  botId: 'master' | 'expert' | 'smart';
+  contractType?: 'CALL';
   contractId: number;
   symbol: string;
   currency: string;
-  barrier: '7' | '8';
+  barrier: '7' | '8' | '';
   ticks: number;
   stake: number;
   purchasedAt: number;
@@ -17,7 +18,7 @@ export function readBotTransactions(accountId: string): BotTransaction[] {
   try {
     const data: unknown = JSON.parse(localStorage.getItem(key(accountId)) ?? '[]');
     if (!Array.isArray(data)) return [];
-    return data.filter((x): x is BotTransaction => !!x && x.accountId === accountId && ['master','expert'].includes(x.botId) && Number.isSafeInteger(x.contractId) && x.contractId > 0 && typeof x.symbol === 'string' && typeof x.currency === 'string' && ['7','8'].includes(x.barrier) && Number.isInteger(x.ticks) && x.ticks > 0 && Number.isFinite(x.stake) && x.stake > 0 && Number.isFinite(x.purchasedAt) && ['open','won','lost','break-even'].includes(x.status) && (x.status === 'open' || (Number.isFinite(x.profit) && Number.isFinite(x.settledAt)))).slice(0,200);
+    return data.filter((x): x is BotTransaction => !!x && x.accountId === accountId && ['master','expert','smart'].includes(x.botId) && Number.isSafeInteger(x.contractId) && x.contractId > 0 && typeof x.symbol === 'string' && typeof x.currency === 'string' && (x.botId === 'smart' ? x.barrier === '' && x.contractType === 'CALL' : ['7','8'].includes(x.barrier)) && Number.isInteger(x.ticks) && x.ticks > 0 && Number.isFinite(x.stake) && x.stake > 0 && Number.isFinite(x.purchasedAt) && ['open','won','lost','break-even'].includes(x.status) && (x.status === 'open' || (Number.isFinite(x.profit) && Number.isFinite(x.settledAt)))).slice(0,200);
   } catch { return []; }
 }
 export function upsertBotTransaction(rows: BotTransaction[], transaction: BotTransaction): BotTransaction[] {
