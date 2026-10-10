@@ -9,8 +9,9 @@ import { SmartAIBot } from './smart-ai-bot';
 import { readBotTransactions, saveBotTransaction, upsertBotTransaction, type BotTransaction } from '@/lib/bot-transactions';
 import styles from './ai-bots-page.module.css';
 const bots = [
-  { id: 'master', name: 'Master AI', barrier: '7', description: 'Under 7 · winning digits 0–6. Choose your volatility index, ticks, fixed stake and session limits.', ribbon: 'UNDER 7', isNew: false },
-  { id: 'expert', name: 'Expert AI', barrier: '8', description: 'Under 8 · winning digits 0–7. Choose your volatility index, ticks, fixed stake and session limits.', ribbon: 'NEW', isNew: true },
+  { id: 'master', name: 'Master AI', barrier: '7', description: 'Under 7 · winning digits 0–6. Choose your volatility index, ticks, fixed stake and session limits.', ribbon: 'UNDER 7', isNew: false, xml: false },
+  { id: 'expert', name: 'Expert AI', barrier: '8', description: 'Under 8 · winning digits 0–7. Choose your volatility index, ticks, fixed stake and session limits.', ribbon: 'NEW', isNew: true, xml: false },
+  { id: 'smart', name: 'Smart AI', barrier: '', description: 'Uploaded XML strategy. Open the original bot in Bot Builder to review and edit its settings.', ribbon: 'NEW', isNew: true, xml: true },
 ] as const;
 type Category = 'all' | 'automated' | 'new';
 export function AIBotsPage() {
@@ -19,7 +20,7 @@ export function AIBotsPage() {
   const sessionLock = useRef(false);
   const pageRef = useRef<HTMLElement>(null);
   const [running, setRunning] = useState(false);
-  const [selected, setSelected] = useState<(typeof bots)[number] | null>(null);
+  const [selected, setSelected] = useState<Extract<(typeof bots)[number], { xml: false }> | null>(null);
   const accountId = auth.activeAccount?.account_id;
   const accountRef = useRef(accountId);
   accountRef.current = accountId;
@@ -74,7 +75,7 @@ export function AIBotsPage() {
         <div className={styles.cards}>{visible.map(bot => <article key={bot.id} className={`${styles.card} ${bot.id === 'master' ? styles.master : styles.expert}`}>
           <span className={styles.ribbon}>{bot.ribbon}</span>
           <h2>{bot.name}</h2><p>{bot.description}</p>
-          <div className={styles.cardBottom}><span>Fixed stake · one contract at a time</span><button onClick={() => setSelected(bot)} aria-label={`Load ${bot.name}`}>Load Bot</button></div>
+          <div className={styles.cardBottom}><span>{bot.xml ? 'XML bot · editable settings' : 'Fixed stake · one contract at a time'}</span>{bot.xml ? <Link href="/bot-editor?bot=smart-ai" aria-label={`Load ${bot.name}`}>Load Bot</Link> : <button onClick={() => setSelected(bot)} aria-label={`Load ${bot.name}`}>Load Bot</button>}</div>
         </article>)}</div>
         {!visible.length && <p className={styles.empty} role="status">No bots match your search.</p>}
         <p className={styles.note}>Load a bot to review its settings. Purchases begin only when you press Start. Trading can lose money.</p>

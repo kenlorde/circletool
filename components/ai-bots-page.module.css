@@ -24,8 +24,8 @@
 .expert .ribbon { background:#13bb88; }
 .cardBottom { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-top:auto; padding-top:22px; }
 .cardBottom span { font-size:12px; color:#66717a; max-width:48%; }
-.cardBottom button { flex-shrink:0; background:#001b09; color:white; padding:14px 22px; border-radius:13px; font-size:17px; font-weight:750; box-shadow:0 6px 13px #0003; }
-.cardBottom button:hover { background:#063b20; }
+.cardBottom :is(button, a) { flex-shrink:0; background:#001b09; color:white; padding:14px 22px; border-radius:13px; font-size:17px; font-weight:750; box-shadow:0 6px 13px #0003; }
+.cardBottom :is(button, a):hover { background:#063b20; }
 .back { display:inline-flex; align-items:center; gap:8px; border:1px solid #536273; border-radius:12px; padding:10px 15px; margin-bottom:18px; }
 .back:disabled { opacity:.45; cursor:not-allowed; }
 .note,.empty { color:#adb9c8; font-size:13px; line-height:1.7; margin-top:20px; }

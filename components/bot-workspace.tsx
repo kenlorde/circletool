@@ -69,6 +69,22 @@ export function BotWorkspace() {
     resetHistory(); setXml(QUICK_DIGIT_BOT); setName('Circletool digit starter.xml'); setId(null); setSavedSnapshot(''); setTab('fields'); setSearch('');
     setStatus('Starter loaded: Under 7, 1 tick, stake 1. Review the settings and session limits before Run.');
   }
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('bot') !== 'smart-ai') return;
+    const controller = new AbortController();
+    setBusy(true);
+    fetch('/bots/smart-ai.xml', { signal: controller.signal })
+      .then(response => { if (!response.ok) throw new Error('Could not load Smart AI.'); return response.text(); })
+      .then(source => {
+        parseBotXml(source);
+        setXml(source); setName('Smart AI.xml'); setId(null);
+        setSavedSnapshot(JSON.stringify(['Smart AI.xml', source]));
+        setStatus('Smart AI loaded. This XML uses Rise/Fall and custom blocks; the current digit runner cannot execute it. You can edit or download the original XML.');
+      })
+      .catch(error => { if (!controller.signal.aborted) setStatus(error instanceof Error ? error.message : 'Could not load Smart AI.'); })
+      .finally(() => { if (!controller.signal.aborted) setBusy(false); });
+    return () => controller.abort();
+  }, []);
   const [zoom, setZoom] = useState(1);
   const [showLibrary, setShowLibrary] = useState(false);
   const undoStack = useRef<string[]>([]);
