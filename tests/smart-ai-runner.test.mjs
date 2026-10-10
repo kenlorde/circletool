@@ -29,6 +29,32 @@ test('Rise buys use fresh proposals, settle in sequence, and stop at profit targ
   for (const p of f.calls.filter(p => p.proposal)) { assert.equal(p.contract_type, 'CALL'); assert.equal(p.underlying_symbol, 'R_10'); assert.equal(p.duration_unit, 't'); assert.equal(p.barrier, undefined); }
   assert.deepEqual(f.transactions.map(t => t.status), ['open', 'won', 'open', 'won']);
 });
+test('all six directions send the selected contract and only digit Over/Under send prediction', async () => {
+  for (const type of ['CALL','PUT','DIGITOVER','DIGITUNDER','DIGITEVEN','DIGITODD']) {
+    const f=fixture();
+    await runSmartAI({...f.input,settings:{...settings,contractType:type,prediction:7}});
+    const quote=f.calls.find(p=>p.proposal), row=f.transactions[0];
+    assert.equal(quote.contract_type,type);assert.equal(row.contractType,type);
+    const isDigit=['DIGITOVER','DIGITUNDER'].includes(type);
+    assert.equal(Object.hasOwn(quote,'barrier'),isDigit);
+    assert.equal(quote.barrier,isDigit?'7':undefined);assert.equal(row.barrier,isDigit?'7':'');
+  }
+});
+test('changing trade type between sessions drops the previous prediction', async () => {
+  const f=fixture();
+  await runSmartAI({...f.input,settings:{...settings,contractType:'DIGITUNDER',prediction:8}});
+  await runSmartAI({...f.input,settings:{...settings,contractType:'DIGITODD',prediction:8}});
+  await runSmartAI({...f.input,settings:{...settings,contractType:'PUT',prediction:8}});
+  assert.deepEqual(f.calls.filter(p=>p.proposal).map(p=>[p.contract_type,p.barrier]),[['DIGITUNDER','8'],['DIGITODD',undefined],['PUT',undefined]]);
+});
+test('invalid directions and impossible predictions are blocked before broker requests', async () => {
+  for(const extra of [{contractType:'BAD'},{contractType:'DIGITOVER',prediction:9},{contractType:'DIGITUNDER',prediction:0},{contractType:'DIGITUNDER',prediction:2.5},{contractType:'DIGITUNDER'}]) {
+    const f=fixture();await assert.rejects(runSmartAI({...f.input,settings:{...settings,...extra}}));assert.equal(f.calls.length,0);
+  }
+  for(const extra of [{contractType:'DIGITOVER',prediction:0},{contractType:'DIGITUNDER',prediction:9}]) {
+    const f=fixture();await runSmartAI({...f.input,settings:{...settings,...extra}});assert.equal(f.calls.find(p=>p.proposal).barrier,String(extra.prediction));
+  }
+});
 test('loss multiplies stake and win resets it to the original stake', async () => {
   const f = fixture([-1, 1, 0.5]); await runSmartAI(f.input);
   assert.deepEqual(f.calls.filter(p => p.proposal).map(p => p.amount), [1, 2, 1]);

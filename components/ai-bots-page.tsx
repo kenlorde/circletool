@@ -7,12 +7,12 @@ import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
 import { SmartAIBot } from './smart-ai-bot';
 import { SmartAIStrategy } from './smart-ai-strategy';
-import { readBotTransactions, saveBotTransaction, upsertBotTransaction, type BotTransaction } from '@/lib/bot-transactions';
+import { botContractLabel, readBotTransactions, saveBotTransaction, upsertBotTransaction, type BotTransaction } from '@/lib/bot-transactions';
 import styles from './ai-bots-page.module.css';
 const bots = [
   { id: 'master', name: 'Master AI', barrier: '7', description: 'Under 7 · winning digits 0–6. Choose your volatility index, ticks, fixed stake and session limits.', ribbon: 'UNDER 7', isNew: false, xml: false },
   { id: 'expert', name: 'Expert AI', barrier: '8', description: 'Under 8 · winning digits 0–7. Choose your volatility index, ticks, fixed stake and session limits.', ribbon: 'NEW', isNew: true, xml: false },
-  { id: 'smart', name: 'Smart AI', barrier: '', description: 'Rise/Fall strategy. Choose your volatility index, stake, ticks, targets and martingale settings.', ribbon: 'NEW', isNew: true, xml: true },
+  { id: 'smart', name: 'Smart AI', barrier: '', description: 'Rise/Fall, Over/Under and Even/Odd. Choose your direction, volatility index, stake, ticks and session settings.', ribbon: 'NEW', isNew: true, xml: true },
 ] as const;
 type Category = 'all' | 'automated' | 'new';
 export function AIBotsPage() {
@@ -62,7 +62,7 @@ export function AIBotsPage() {
           <div className={styles.summary}><span>Contracts <b>{botTransactions.length}</b></span><span>Wins <b>{botTransactions.filter(x=>x.status === 'won').length}</b></span><span>Losses <b>{botTransactions.filter(x=>x.status === 'lost').length}</b></span>{Object.entries(totals).map(([currency,total]) => <span key={currency}>Net profit <b className={total < 0 ? styles.loss : styles.win}>{total.toFixed(2)} {currency}</b></span>)}</div>
           {storageError && <p role="status">{storageError}</p>}
           {!botTransactions.length ? <p className={styles.empty}>No transactions recorded for this bot yet. New purchases will appear here automatically.</p> : <ol className={styles.transactionList}>{botTransactions.map(x => <li key={x.contractId}>
-            <div className={styles.transactionTop}><strong>{x.contractType === 'CALL' ? 'Rise' : `Under ${x.barrier}`} · {x.symbol}</strong><span className={x.status === 'lost' ? styles.loss : x.status === 'open' ? '' : styles.win}>{x.status === 'break-even' ? 'Break even' : x.status === 'open' ? 'Open' : x.status === 'won' ? 'Won' : 'Lost'}</span></div>
+            <div className={styles.transactionTop}><strong>{botContractLabel(x)} · {x.symbol}</strong><span className={x.status === 'lost' ? styles.loss : x.status === 'open' ? '' : styles.win}>{x.status === 'break-even' ? 'Break even' : x.status === 'open' ? 'Open' : x.status === 'won' ? 'Won' : 'Lost'}</span></div>
             <small>Contract #{x.contractId} · {new Date(x.purchasedAt).toLocaleString('en-KE',{timeZone:'Africa/Nairobi'})} EAT</small>
             <div className={styles.transactionAmounts}><span>Stake <b>{x.stake.toFixed(2)} {x.currency}</b></span><span>Duration <b>{x.ticks} {x.ticks === 1 ? 'tick' : 'ticks'}</b></span><span>Profit / loss <b className={x.status === 'lost' ? styles.loss : styles.win}>{x.profit === undefined ? 'Pending' : `${x.profit > 0 ? '+' : ''}${x.profit.toFixed(2)} ${x.currency}`}</b></span></div>
           </li>)}</ol>}
@@ -76,7 +76,7 @@ export function AIBotsPage() {
         <div className={styles.cards}>{visible.map(bot => <article key={bot.id} className={`${styles.card} ${bot.id === 'master' ? styles.master : styles.expert}`}>
           <span className={styles.ribbon}>{bot.ribbon}</span>
           <h2>{bot.name}</h2><p>{bot.description}</p>
-          <div className={styles.cardBottom}><span>{bot.xml ? 'Rise/Fall · editable settings' : 'Fixed stake · one contract at a time'}</span><button onClick={() => setSelected(bot)} aria-label={`Load ${bot.name}`}>Load Bot</button></div>
+          <div className={styles.cardBottom}><span>{bot.xml ? '3 trade types · editable settings' : 'Fixed stake · one contract at a time'}</span><button onClick={() => setSelected(bot)} aria-label={`Load ${bot.name}`}>Load Bot</button></div>
         </article>)}</div>
         {!visible.length && <p className={styles.empty} role="status">No bots match your search.</p>}
         <p className={styles.note}>Load a bot to review its settings. Purchases begin only when you press Start. Trading can lose money.</p>

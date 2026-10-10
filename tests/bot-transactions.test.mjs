@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 const source=stripTypeScriptTypes(await readFile(new URL('../lib/bot-transactions.ts',import.meta.url),'utf8'));
-const { readBotTransactions,saveBotTransaction,upsertBotTransaction }=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const { readBotTransactions,saveBotTransaction,upsertBotTransaction,botContractLabel }=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const storage=new Map();globalThis.localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)};
 const row={accountId:'A',botId:'expert',contractId:123,symbol:'1HZ100V',currency:'USD',barrier:'8',ticks:1,stake:.35,purchasedAt:100,status:'open'};
 test('purchase becomes one settled row and survives reading again',()=>{
@@ -23,6 +23,14 @@ test('Smart AI Rise records persist alongside existing digit bots',()=>{
  assert.equal(rows.find(x=>x.botId==='smart').contractType,'CALL');
  assert.equal(rows.find(x=>x.botId==='smart').profit,.2);
  assert.equal(rows.find(x=>x.botId==='expert').barrier,'8');
+});
+test('all Smart AI directions persist with the correct transaction label',()=>{
+ storage.clear();
+ const directions=[['CALL','','Rise'],['PUT','','Fall'],['DIGITOVER','3','Over 3'],['DIGITUNDER','8','Under 8'],['DIGITEVEN','','Even'],['DIGITODD','','Odd']];
+ directions.forEach(([contractType,barrier,label],i)=>saveBotTransaction({...row,botId:'smart',contractType,barrier,contractId:500+i,purchasedAt:100+i}));
+ const rows=readBotTransactions('A');assert.equal(rows.length,6);
+ for(const [type,barrier,label] of directions)assert.equal(botContractLabel(rows.find(t=>t.contractType===type)),label);
+ assert.equal(botContractLabel(row),'Under 8');
 });
 test('invalid persisted data is rejected and journal caps at 200 newest rows',()=>{
  storage.clear();storage.set('circletool.bot-transactions.v1:A','bad json');assert.deepEqual(readBotTransactions('A'),[]);

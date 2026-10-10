@@ -1,8 +1,31 @@
-import type { BotTransaction } from './bot-transactions';
+import type { BotTransaction, SmartAIContractType } from './bot-transactions';
 
 export interface SmartAISettings {
   stake: number; ticks: number; target: number; lossLimit: number;
   martingale: number; useList: boolean; stakeList: number[];
+  contractType?: SmartAIContractType; prediction?: number;
+}
+export const SMART_AI_CONTRACTS = [
+  { type: 'CALL', label: 'Rise', group: 'rise-fall' },
+  { type: 'PUT', label: 'Fall', group: 'rise-fall' },
+  { type: 'DIGITOVER', label: 'Over', group: 'over-under' },
+  { type: 'DIGITUNDER', label: 'Under', group: 'over-under' },
+  { type: 'DIGITEVEN', label: 'Even', group: 'even-odd' },
+  { type: 'DIGITODD', label: 'Odd', group: 'even-odd' },
+] as const;
+export function smartAIContract(s: Pick<SmartAISettings, 'contractType' | 'prediction'>) {
+  const contractType = s.contractType ?? 'CALL';
+  const choice = SMART_AI_CONTRACTS.find(c => c.type === contractType);
+  if (!choice) throw Error('Choose Rise, Fall, Over, Under, Even or Odd.');
+  let barrier: string | undefined;
+  if (choice.group === 'over-under') {
+    const prediction = s.prediction;
+    if (prediction === undefined || !Number.isInteger(prediction) || prediction < 0 || prediction > 9) throw Error('Choose a digit prediction from 0 to 9.');
+    if (contractType === 'DIGITOVER' && prediction === 9) throw Error('Over prediction must be 0–8.');
+    if (contractType === 'DIGITUNDER' && prediction === 0) throw Error('Under prediction must be 1–9.');
+    barrier = String(prediction);
+  }
+  return { contractType, barrier, label: `${choice.label}${barrier === undefined ? '' : ` ${barrier}`}` };
 }
 export interface SmartAIProgress { message: string; trades: number; profit: number; wins: number; losses: number; nextStake: number }
 interface Transport { send<T>(payload: Record<string, unknown>): Promise<T> }
@@ -23,6 +46,7 @@ export async function runSmartAI(input: {
 }) {
   const { settings: s, ws, signal, pending } = input;
   validateSmartAISettings(s);
+  const contract = smartAIContract(s);
   let trades = 0, profit = 0, wins = 0, losses = 0, stake = s.stake, listIndex = 0;
   const nextStake = () => s.useList ? s.stakeList[listIndex] : stake;
   const report = (message: string) => { const result = { message, trades, profit, wins, losses, nextStake: nextStake() ?? 0 }; input.onProgress(result); return result; };
@@ -60,20 +84,20 @@ export async function runSmartAI(input: {
     if (!Number.isFinite(amount) || amount <= 0) return report('Next stake is invalid. Stopped.');
     // Reserve the entire next stake, as in the existing native bots.
     if (profit <= -s.lossLimit || amount > s.lossLimit + profit + 0.000001) return report('Loss limit reached, or remaining allowance is below the next stake. Stopped.');
-    report('Requesting Rise quote…');
-    const quote = await request<{ proposal?: { id?: string; ask_price?: number | string } }>({ proposal: 1, amount, basis: 'stake', contract_type: 'CALL', currency: input.currency, duration: s.ticks, duration_unit: 't', underlying_symbol: input.symbol });
+    report(`Requesting ${contract.label} quote…`);
+    const quote = await request<{ proposal?: { id?: string; ask_price?: number | string } }>({ proposal: 1, amount, basis: 'stake', contract_type: contract.contractType, ...(contract.barrier === undefined ? {} : { barrier: contract.barrier }), currency: input.currency, duration: s.ticks, duration_unit: 't', underlying_symbol: input.symbol });
     if (!active()) return report('Stopped before purchase.');
     const price = Number(quote.proposal?.ask_price);
     if (!quote.proposal?.id || !Number.isFinite(price) || price <= 0 || Math.abs(price - amount) > 0.000001 || price > s.lossLimit + profit + 0.000001) throw Error('Quote does not match the stake or loss allowance. No purchase sent.');
     // Persist before sending buy: a missing confirmation must never be retried.
-    report('Purchasing Rise…');
+    report(`Purchasing ${contract.label}…`);
     if (!active()) return report('Stopped before purchase.');
     pending.set('unknown');
     const purchase = await request<{ buy?: { contract_id?: number | string } }>({ buy: quote.proposal.id, price: String(price) });
     const id = Number(purchase.buy?.contract_id);
     if (!Number.isSafeInteger(id) || id <= 0) throw Error('Purchase confirmation missing. Check account transactions before restarting.');
     pending.set(String(id));
-    const transaction: BotTransaction = { accountId: input.accountId, botId: 'smart', contractType: 'CALL', contractId: id, symbol: input.symbol, currency: input.currency, barrier: '', ticks: s.ticks, stake: price, purchasedAt: Date.now(), status: 'open' };
+    const transaction: BotTransaction = { accountId: input.accountId, botId: 'smart', contractType: contract.contractType, contractId: id, symbol: input.symbol, currency: input.currency, barrier: contract.barrier ?? '', ticks: s.ticks, stake: price, purchasedAt: Date.now(), status: 'open' };
     input.onTransaction(transaction); report(`Contract ${id} open. Waiting for settlement…`);
     const deadline = Date.now() + (input.settlementTimeoutMs ?? 180000);
     let pnl: number | undefined;

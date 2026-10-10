@@ -1,11 +1,22 @@
+export type SmartAIContractType = 'CALL' | 'PUT' | 'DIGITOVER' | 'DIGITUNDER' | 'DIGITEVEN' | 'DIGITODD';
+export function botContractLabel(transaction: Pick<BotTransaction, 'contractType' | 'barrier'>): string {
+  const labels: Record<SmartAIContractType, string> = { CALL: 'Rise', PUT: 'Fall', DIGITOVER: 'Over', DIGITUNDER: 'Under', DIGITEVEN: 'Even', DIGITODD: 'Odd' };
+  if (!transaction.contractType) return `Under ${transaction.barrier}`;
+  return labels[transaction.contractType] + (['DIGITOVER', 'DIGITUNDER'].includes(transaction.contractType) ? ` ${transaction.barrier}` : '');
+}
+function validSmartContract(x: BotTransaction) {
+  if (['CALL', 'PUT', 'DIGITEVEN', 'DIGITODD'].includes(x.contractType ?? '')) return x.barrier === '';
+  if (!/^[0-9]$/.test(x.barrier)) return false;
+  return x.contractType === 'DIGITOVER' ? Number(x.barrier) <= 8 : x.contractType === 'DIGITUNDER' && Number(x.barrier) >= 1;
+}
 export interface BotTransaction {
   accountId: string;
   botId: 'master' | 'expert' | 'smart';
-  contractType?: 'CALL';
+  contractType?: SmartAIContractType;
   contractId: number;
   symbol: string;
   currency: string;
-  barrier: '7' | '8' | '';
+  barrier: string;
   ticks: number;
   stake: number;
   purchasedAt: number;
@@ -18,7 +29,7 @@ export function readBotTransactions(accountId: string): BotTransaction[] {
   try {
     const data: unknown = JSON.parse(localStorage.getItem(key(accountId)) ?? '[]');
     if (!Array.isArray(data)) return [];
-    return data.filter((x): x is BotTransaction => !!x && x.accountId === accountId && ['master','expert','smart'].includes(x.botId) && Number.isSafeInteger(x.contractId) && x.contractId > 0 && typeof x.symbol === 'string' && typeof x.currency === 'string' && (x.botId === 'smart' ? x.barrier === '' && x.contractType === 'CALL' : ['7','8'].includes(x.barrier)) && Number.isInteger(x.ticks) && x.ticks > 0 && Number.isFinite(x.stake) && x.stake > 0 && Number.isFinite(x.purchasedAt) && ['open','won','lost','break-even'].includes(x.status) && (x.status === 'open' || (Number.isFinite(x.profit) && Number.isFinite(x.settledAt)))).slice(0,200);
+    return data.filter((x): x is BotTransaction => !!x && x.accountId === accountId && ['master','expert','smart'].includes(x.botId) && Number.isSafeInteger(x.contractId) && x.contractId > 0 && typeof x.symbol === 'string' && typeof x.currency === 'string' && (x.botId === 'smart' ? validSmartContract(x) : ['7','8'].includes(x.barrier)) && Number.isInteger(x.ticks) && x.ticks > 0 && Number.isFinite(x.stake) && x.stake > 0 && Number.isFinite(x.purchasedAt) && ['open','won','lost','break-even'].includes(x.status) && (x.status === 'open' || (Number.isFinite(x.profit) && Number.isFinite(x.settledAt)))).slice(0,200);
   } catch { return []; }
 }
 export function upsertBotTransaction(rows: BotTransaction[], transaction: BotTransaction): BotTransaction[] {
