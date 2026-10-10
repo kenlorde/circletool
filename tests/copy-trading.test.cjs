@@ -77,7 +77,9 @@ test('OTP bridge accepts only Deriv authenticated URLs and redacts upstream erro
       assert.equal((await POST(request({ appId: 'new-id', token: 'secret', accountId: 'DOT1' }))).status, 502);
     }
     global.fetch = async () => ({ ok: true, json: async () => ({ data: { url: 'wss://api.derivws.com/trading/v1/options/ws/demo?otp=x' } }) });
-    assert.equal((await POST(request({ appId: 'new-id', token: 'secret', accountId: 'DOT1' }))).status, 200);
+    assert.equal((await POST(request({ appId: 'new-id', token: 'secret', accountId: 'DOT1' }))).status, 403);
+    global.fetch = async () => ({ ok: true, json: async () => ({ data: { url: 'wss://api.derivws.com/trading/v1/options/ws/real?otp=x' } }) });
+    assert.equal((await POST(request({ appId: 'new-id', token: 'secret', accountId: 'ROT1' }))).status, 200);
     global.fetch = async () => ({ ok: false, status: 401, json: async () => ({ message: 'secret' }) });
     const denied = await POST(request({ appId: 'new-id', token: 'secret' }));
     assert.equal(denied.status, 401); assert.ok(!JSON.stringify(denied.body).includes('secret'));

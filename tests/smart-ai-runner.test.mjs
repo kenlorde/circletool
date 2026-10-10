@@ -15,7 +15,7 @@ function fixture(profits = [0.5]) {
     if (payload.buy) { buys++; return { buy: { contract_id: buys } }; }
     return { proposal_open_contract: { contract_id: payload.contract_id, is_sold: 1, profit: profits[buys - 1] ?? 0.5 } };
   } };
-  const input = { settings, ws, symbol: 'R_10', currency: 'USD', accountId: 'VRTC1', signal: controller.signal, isCurrent: () => true,
+  const input = { settings, ws, symbol: 'R_10', currency: 'USD', accountId: 'REAL1', accountType: 'real', signal: controller.signal, isCurrent: () => true,
     pending: { get: () => pending, set: value => { pending = value; }, clear: () => { pending = null; } },
     findTransaction: id => transactions.find(t => t.contractId === id), onTransaction: t => transactions.push(t),
     onProgress: () => {}, refreshBalance: async () => {}, requestTimeoutMs: 30, pollMs: 0, paceMs: 0,
@@ -108,4 +108,10 @@ test('settlement timeout keeps contract pending and restart reconciles before tr
   f.input.ws.send = send;
   f.controller.abort(); await runSmartAI(f.input);
   assert.equal(f.pending(), null); assert.equal(f.transactions.at(-1).status, 'won');
+});
+
+test('demo or unknown account types are rejected before any request',async()=>{
+ for(const accountType of ['demo',undefined,'unknown']) {
+  const f=fixture();await assert.rejects(runSmartAI({...f.input,accountType}),/real account/);assert.equal(f.calls.length,0);
+ }
 });

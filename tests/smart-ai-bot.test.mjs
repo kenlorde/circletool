@@ -10,7 +10,7 @@ function bot(barrier, sessionLock, send, storage = new Map()) {
   const calls = [], state = [], transactions = [];
   const context = { barrier, sessionLock, anotherBotRunning: false, lock: { current: false }, running: { current: false }, mounted: { current: true },
     ws: { isConnected: true, async send(p) { calls.push(p); return send(p); } }, isConnected: true, auth: { authState: 'authenticated' }, accountId: 'test-account',
-    waitForDigitEight: async () => 100, market: { pipSize: 2, activeSymbol: { underlying_symbol: '1HZ100V' } }, currency: 'USD', stake: '0.35', ticks: '1', target: '0.1', limit: '1',
+    realAccount: {current:true}, waitForDigitEight: async () => 100, market: { pipSize: 2, activeSymbol: { underlying_symbol: '1HZ100V' } }, currency: 'USD', stake: '0.35', ticks: '1', target: '0.1', limit: '1',
     localStorage: { getItem: k => storage.get(k), setItem: (k,v) => storage.set(k,v), removeItem: k => storage.delete(k) },
     balanceSync: { async refresh() { return true; } }, onRunStateChange: v => state.push(v), setMessage() {}, setQuoteInfo() {}, setResults() {}, setBusy() {}, setProfit() {}, setTrades() {},
     onTransaction: transaction => transactions.push(transaction), readBotTransactions: () => [],
@@ -68,4 +68,16 @@ test('original bot buys after digit 8 without applying payout screening', async 
  const b=bot('8',{current:false},async p=>p.proposal ? {proposal:{id:'original',ask_price:.35}} : reply(p));
  let entries=0;b.context.waitForDigitEight=async()=>{entries++;return 100;};
  await b.start();assert.equal(entries,1);assert.equal(b.calls.find(p=>p.buy).buy,'original');
+});
+
+test('Master and Expert reject demo accounts before any request',async()=>{
+ for(const barrier of ['7','8']) {
+  const b=bot(barrier,{current:false},async p=>reply(p));b.context.realAccount.current=false;
+  await b.start();assert.equal(b.calls.length,0);assert.equal(b.state.length,0);
+ }
+});
+test('switching to demo while waiting for a quote prevents the purchase',async()=>{
+ const b=bot('7',{current:false},async p=>reply(p));const send=b.context.ws.send;
+ b.context.ws.send=async p=>{const response=await send(p);if(p.proposal)b.context.realAccount.current=false;return response;};
+ await b.start();assert.equal(b.calls.filter(p=>p.buy).length,0);
 });

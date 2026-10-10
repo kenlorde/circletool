@@ -220,10 +220,11 @@ function timeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T
   });
 }
 export async function runBotSession(input: {
-  program: Program; ws: BotTransport; currency: string; limits: BotLimits; signal: AbortSignal;
+  program: Program; ws: BotTransport; currency: string; accountType: 'real' | 'demo'; limits: BotLimits; signal: AbortSignal;
   isAccountCurrent: () => boolean; onProgress: (progress: BotProgress) => void;
   requestTimeoutMs?: number; pollIntervalMs?: number;
 }): Promise<BotProgress> {
+  if (input.accountType !== 'real') throw Error('Bots require a real account. Demo accounts are not supported.');
   const { program, ws, currency, limits, signal, isAccountCurrent, onProgress } = input;
   if (!Number.isInteger(limits.maxTrades) || limits.maxTrades < 1 || limits.maxTrades > 100 || !Number.isFinite(limits.maxStake) || limits.maxStake <= 0 || !Number.isFinite(limits.lossLimit) || limits.lossLimit <= 0) throw new Error('Set 1–100 trades and positive maximum stake and loss limit.');
   const state = program.createState();

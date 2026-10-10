@@ -23,13 +23,14 @@ function sendCopyCommand(appId: string, followerToken: string, traderToken: stri
     socket.onclose = () => { if (!settled) finish(new Error('Deriv closed the connection.')); };
     socket.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data) as { req_id?: number; error?: { message?: string }; msg_type?: string };
+        const data = JSON.parse(event.data) as { req_id?: number; error?: { message?: string }; msg_type?: string; authorize?: { is_virtual?: number | boolean } };
         if (data.error) {
           const message = data.error.message ?? 'Deriv rejected the request.';
           finish(new Error(message.split(followerToken).join('[hidden]').split(traderToken).join('[hidden]')));
           return;
         }
         if (data.req_id === 1 && data.msg_type === 'authorize') {
+          if (action === 'copy_start' && data.authorize?.is_virtual !== 0 && data.authorize?.is_virtual !== false) { finish(new Error('Automated copying requires a verified real account. Demo accounts are not supported.')); return; }
           socket.send(JSON.stringify({ [action]: traderToken, ...(action === 'copy_start' ? { max_trade_stake: maxStake } : {}), req_id: 2 }));
         } else if (data.req_id === 2 && data.msg_type === action) {
           finish();

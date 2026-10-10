@@ -42,7 +42,7 @@ function mockTransport(profits = [0.2, -1]) {
   } };
 }
 function session(ws, overrides = {}) {
-  return runBotSession({ program: compileBotXml(QUICK_DIGIT_BOT), ws, currency: 'USD', limits, signal: new AbortController().signal, isAccountCurrent: () => true, onProgress: () => {}, requestTimeoutMs: 30, pollIntervalMs: 0, ...overrides });
+  return runBotSession({ program: compileBotXml(QUICK_DIGIT_BOT), ws, currency: 'USD', accountType: 'real', limits, signal: new AbortController().signal, isAccountCurrent: () => true, onProgress: () => {}, requestTimeoutMs: 30, pollIntervalMs: 0, ...overrides });
 }
 test('two consecutive trades use fresh proposals and settle before the next buy', async () => {
   const ws = mockTransport(); const result = await session(ws);
@@ -104,4 +104,10 @@ test('martingale variables are updated after a loss and stake cap stops escalati
   source = source.replace('<block type="trade_again"/>', '<block type="controls_if"><value name="IF0"><block type="contract_check_result"><field name="CHECK_RESULT">loss</field></block></value><statement name="DO0"><block type="variables_set"><field name="VAR" id="stake">Stake</field><value name="VALUE"><block type="math_arithmetic"><field name="OP">MULTIPLY</field><value name="A"><block type="variables_get"><field name="VAR" id="stake">Stake</field></block></value><value name="B"><block type="math_number"><field name="NUM">2</field></block></value></block></value></block></statement><next><block type="trade_again"/></next></block>');
   const result = await session(mockTransport([-1]), { program: compileBotXml(source) });
   assert.equal(result.trades, 1); assert.match(result.message, /maximum stake/);
+});
+
+test('XML runner rejects demo and unverified account types before any request',async()=>{
+ for(const accountType of ['demo',undefined]) {
+  const ws=mockTransport();await assert.rejects(session(ws,{accountType}),/real account/);assert.equal(ws.calls.length,0);
+ }
 });

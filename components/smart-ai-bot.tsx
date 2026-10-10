@@ -18,11 +18,14 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
   const [results, setResults] = useState({ wins: 0, losses: 0, drawdown: 0 });
   const running = useRef(false), lock = useRef(false), mounted = useRef(true);
   const accountId = auth.activeAccount?.account_id;
+  const realAccount = useRef(auth.activeAccount?.account_type === 'real');
+  realAccount.current = auth.activeAccount?.account_type === 'real';
   const currency = auth.activeAccount?.currency ?? 'USD';
   useEffect(() => { mounted.current = true; const hide = () => { if (document.hidden) running.current = false; }; document.addEventListener('visibilitychange', hide); return () => { mounted.current = false; running.current = false; document.removeEventListener('visibilitychange', hide); }; }, []);
-  useEffect(() => { running.current = false; }, [ws, isConnected, accountId, barrier]);
+  useEffect(() => { running.current = false; }, [ws, isConnected, accountId, barrier, auth.activeAccount?.account_type]);
   const stop = () => { running.current = false; setMessage('Stopping. A sent purchase or open contract will finish; no next trade.'); };
   async function start() {
+    if (!realAccount.current) { setMessage('Bots require a real account. Demo accounts are not supported.'); return; }
     if (lock.current || sessionLock.current || anotherBotRunning || !ws || !isConnected || auth.authState !== 'authenticated' || !accountId || !market.activeSymbol) return;
     const amount = Number(stake), duration = Number(ticks), goal = Number(target), loss = Number(limit);
     if (![amount, duration, goal, loss].every(n => Number.isFinite(n) && n > 0) || !Number.isInteger(duration) || amount > loss) { setMessage('Enter positive settings. Ticks must be a whole number and stake must fit the loss limit.'); return; }
@@ -45,20 +48,20 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
       }
       const portfolio = await ws.send<Reply>({ portfolio: 1 });
       if (!portfolio.portfolio || portfolio.portfolio.contracts.length) throw Error('Wait until existing account positions close before starting the bot.');
-      if (!running.current || !mounted.current) return;
+      if (!running.current || !mounted.current || !realAccount.current) return;
       setProfit(0); setTrades(0); setResults({ wins: 0, losses: 0, drawdown: 0 });
       const symbol = market.activeSymbol.underlying_symbol;
       say('Waiting for the cursor to touch digit 8 before the first purchase…');
-      const entryEpoch = await waitForDigitEight(ws, symbol, market.pipSize, market.currentTick?.epoch ?? 0, () => running.current && mounted.current);
+      const entryEpoch = await waitForDigitEight(ws, symbol, market.pipSize, market.currentTick?.epoch ?? 0, () => running.current && mounted.current && realAccount.current);
       if (!ws.isConnected) throw Error('Disconnected while waiting for digit 8. Stopped.');
       if (entryEpoch === null || !running.current || !mounted.current) return;
-      while (running.current && mounted.current) {
+      while (running.current && mounted.current && realAccount.current) {
         if (total >= goal) { say('Profit target reached. Stopped.'); break; }
         if (total <= -loss || amount > loss + total + 0.000001) { say('Loss limit reached, or remaining allowance is below the stake. Stopped.'); break; }
         if (!ws.isConnected) throw Error('Disconnected. Stopped; no automatic restart.');
         say('Requesting Under '+barrier+' quote…');
         const quote = await ws.send<Reply>({ proposal: 1, amount, basis: 'stake', contract_type: 'DIGITUNDER', currency, duration, duration_unit: 't', underlying_symbol: symbol, barrier });
-        if (!running.current || !mounted.current) break;
+        if (!running.current || !mounted.current || !realAccount.current) break;
         const p = quote.proposal, price = Number(p?.ask_price);
         if (!p?.id || !Number.isFinite(price) || price <= 0 || price > amount + 0.000001 || price > loss + total + 0.000001) throw Error('Invalid quote or quote exceeds the stake/loss allowance.');
         localStorage.setItem(key, 'unknown');
@@ -109,9 +112,10 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
       <label className="block">Volatility index<select className="mt-2 block w-full rounded-md border bg-background p-3" value={market.activeSymbol?.underlying_symbol ?? ''} disabled={busy} onChange={e => market.selectSymbol(e.target.value)}><option value="" disabled>Select a market</option>{market.symbols.filter(s => /volatility/i.test(s.underlying_symbol_name)).map(s => <option key={s.underlying_symbol} value={s.underlying_symbol}>{s.underlying_symbol_name}</option>)}</select></label>
       <div className="grid grid-cols-2 gap-4">{[{label:'Stake ('+currency+')',value:stake,set:setStake},{label:'Duration (ticks)',value:ticks,set:setTicks},{label:'Profit target ('+currency+')',value:target,set:setTarget},{label:'Loss limit ('+currency+')',value:limit,set:setLimit}].map(f => <label key={f.label}>{f.label}<Input className="mt-2" type="number" min="0" step={f.label.includes('ticks')?'1':'0.01'} value={f.value} disabled={busy} onChange={e => f.set(e.target.value)} /></label>)}</div>
       <p className="text-sm">Account: {auth.activeAccount ? auth.activeAccount.account_type+' · '+accountId : 'Not logged in'}. Settings lock while running.</p>
-      <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={busy || anotherBotRunning || !isConnected || !market.activeSymbol}>Start bot</Button>}<Button variant="destructive" onClick={stop} disabled={!busy}>Stop</Button></div>
+      <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={busy || !realAccount.current || anotherBotRunning || !isConnected || !market.activeSymbol}>Start bot</Button>}<Button variant="destructive" onClick={stop} disabled={!busy}>Stop</Button></div>
     </div>
     <div className="rounded-xl border p-5" aria-live="polite"><p>{message}</p><div className="mt-4 flex gap-8"><span>Trades: <b>{trades}</b></span><span>Net profit: <b>{profit.toFixed(2)} {currency}</b></span></div><p className="mt-3 text-sm">Session wins: {results.wins} · Losses: {results.losses} · Win rate: {trades ? (results.wins / trades * 100).toFixed(1) + '%' : '—'} · Largest drawdown: {results.drawdown.toFixed(2)} {currency}</p><p className="mt-3 text-sm">Options account balance: {auth.activeAccount?.balance ?? '—'} {currency}</p>{balanceSync.error && <p className="mt-2 text-sm text-amber-500" role="status">{balanceSync.error}</p>}<Button className="mt-3" variant="outline" onClick={() => void balanceSync.refresh()} disabled={!isConnected || !auth.wsUrl}>Refresh balance</Button></div>
+    {auth.activeAccount?.account_type !== 'real' && <p role="status" className="text-sm text-amber-500">Bots require a real account. Switch to a real account to start.</p>}
     {anotherBotRunning && <p role="status" className="text-sm text-amber-500">The other bot is running. Stop it before starting {botName}.</p>}
     <p className="text-sm text-muted-foreground">Keep this page open. Leaving the page or backgrounding your iPhone stops new purchases. Stop cannot cancel an order already sent. Trading can lose money; targets do not guarantee profit.</p>
   </section>;

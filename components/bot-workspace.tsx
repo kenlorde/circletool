@@ -34,26 +34,27 @@ export function BotWorkspace() {
   const [lossLimit, setLossLimit] = useState('5');
   const session = useRef<AbortController | null>(null);
   const mounted = useRef(true);
-  const accountRef = useRef({ ws, id: auth.activeAccountId, authenticated: !!auth.wsUrl, isConnected });
-  accountRef.current = { ws, id: auth.activeAccountId, authenticated: !!auth.wsUrl, isConnected };
+  const accountRef = useRef({ ws, id: auth.activeAccountId, authenticated: !!auth.wsUrl && auth.activeAccount?.account_type === 'real', isConnected });
+  accountRef.current = { ws, id: auth.activeAccountId, authenticated: !!auth.wsUrl && auth.activeAccount?.account_type === 'real', isConnected };
   useEffect(() => {
     mounted.current = true;
     const hide = () => { if (document.hidden) session.current?.abort(); };
     document.addEventListener('visibilitychange', hide);
     return () => { mounted.current = false; session.current?.abort(); document.removeEventListener('visibilitychange', hide); };
   }, []);
-  useEffect(() => { session.current?.abort(); }, [ws, auth.activeAccountId, auth.wsUrl, isConnected]);
+  useEffect(() => { session.current?.abort(); }, [ws, auth.activeAccountId, auth.wsUrl, isConnected, auth.activeAccount?.account_type]);
   async function run() {
     if (session.current || busy) return;
     try {
       if (!ws || !isConnected || !auth.wsUrl || !auth.activeAccountId || !auth.activeAccount?.currency) throw new Error('Connect a Deriv account before running a bot.');
+      if (auth.activeAccount.account_type !== 'real') throw new Error('Bots require a real account. Demo accounts are not supported.');
       const program = compileBotXml(xml);
       const limits = { maxTrades: Number(maxTrades), maxStake: Number(maxStake), lossLimit: Number(lossLimit) };
       const accountId = auth.activeAccountId;
       const controller = new AbortController(); session.current = controller; setRunning(true);
       setStatus('');
       await runBotSession({
-        program, ws, currency: auth.activeAccount.currency, limits, signal: controller.signal,
+        program, ws, currency: auth.activeAccount.currency, accountType: auth.activeAccount.account_type, limits, signal: controller.signal,
         isAccountCurrent: () => accountRef.current.ws === ws && accountRef.current.id === accountId && accountRef.current.authenticated && accountRef.current.isConnected && ws.isConnected,
         onProgress: next => { if (mounted.current) setProgress(next); },
       });
@@ -234,7 +235,7 @@ export function BotWorkspace() {
     <section className="mx-4 mb-44 rounded-xl border border-border p-4" aria-label="Bot session settings">
       <h2 className="font-semibold">Trading session</h2>
       <p className="mt-2 text-sm">{auth.activeAccount ? `Account: ${auth.activeAccount.account_type} · ${auth.activeAccountId} · ${auth.activeAccount.currency}` : 'Connect your Deriv account to trade.'}</p>
-      <p className="mt-2 text-sm text-muted-foreground">Run places trades on this account. Start with a demo account. Each contract must settle before the next purchase. Stop prevents new purchases and waits for the open contract to settle.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Run places trades on your selected real account. Demo accounts are not supported. Each contract must settle before the next purchase. Stop prevents new purchases and waits for the open contract to settle.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <label className="text-sm">Maximum trades (1–100)<input className={control + ' mt-1 w-full'} type="number" min="1" max="100" step="1" value={maxTrades} disabled={running} onChange={event => setMaxTrades(event.target.value)} /></label>
         <label className="text-sm">Maximum stake ({auth.activeAccount?.currency ?? 'account currency'})<input className={control + ' mt-1 w-full'} type="number" min="0.01" step="0.01" value={maxStake} disabled={running} onChange={event => setMaxStake(event.target.value)} /></label>
@@ -244,7 +245,7 @@ export function BotWorkspace() {
       <p className="mt-3 text-sm">Trades: {progress.trades} · Session profit/loss: {progress.profit.toFixed(2)} {auth.activeAccount?.currency ?? ''} · <Link href="/reports" className="underline">Trade history</Link></p>
     </section>
     <div className="builder-runbar">
-      {running ? <button type="button" onClick={() => { session.current?.abort(); setProgress(previous => ({ ...previous, message: 'Stopping. An open contract will still settle.' })); }}><Square size={23} />Stop</button> : <button type="button" disabled={!analysis.valid || busy || !isConnected || !auth.wsUrl} onClick={run}><Play size={23} />Run</button>}
+      {running ? <button type="button" onClick={() => { session.current?.abort(); setProgress(previous => ({ ...previous, message: 'Stopping. An open contract will still settle.' })); }}><Square size={23} />Stop</button> : <button type="button" disabled={!analysis.valid || busy || !isConnected || !auth.wsUrl || auth.activeAccount?.account_type !== 'real'} onClick={run}><Play size={23} />Run</button>}
       <button type="button" disabled={running || busy} onClick={() => { try { const program = compileBotXml(xml); setStatus(`Ready: ${program.preview.contract_type} on ${program.preview.symbol}, ${program.preview.duration} tick(s), stake ${program.preview.amount}. Review your account and limits before Run.`); } catch (error) { setStatus(error instanceof Error ? error.message : 'Invalid bot.'); } }}>Check bot</button>
       <div role="status" aria-live="polite"><strong>{running ? 'Bot session active' : 'Bot is not running'}</strong><small>{progress.message}</small></div>
     </div>

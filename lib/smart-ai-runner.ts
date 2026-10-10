@@ -37,7 +37,7 @@ export function validateSmartAISettings(s: SmartAISettings) {
   if ((s.useList ? s.stakeList[0] : s.stake) > s.lossLimit) throw Error('The first stake must fit the session loss limit.');
 }
 export async function runSmartAI(input: {
-  settings: SmartAISettings; ws: Transport; symbol: string; currency: string; accountId: string;
+  settings: SmartAISettings; ws: Transport; symbol: string; currency: string; accountId: string; accountType: 'real' | 'demo';
   signal: AbortSignal; isCurrent: () => boolean; pending: PendingStore;
   findTransaction: (id: number) => BotTransaction | undefined;
   onTransaction: (transaction: BotTransaction) => void;
@@ -45,6 +45,7 @@ export async function runSmartAI(input: {
   requestTimeoutMs?: number; pollMs?: number; paceMs?: number; settlementTimeoutMs?: number;
 }) {
   const { settings: s, ws, signal, pending } = input;
+  if (input.accountType !== 'real') throw Error('Bots require a real account. Demo accounts are not supported.');
   validateSmartAISettings(s);
   const contract = smartAIContract(s);
   let trades = 0, profit = 0, wins = 0, losses = 0, stake = s.stake, listIndex = 0;

@@ -43,6 +43,7 @@ export function NewCopyTrading() {
     const follower = followers.find(a => a.id === followerId), trader = traders.find(a => a.id === traderId);
     const limit = Number(stake), total = Number(budget);
     if (!follower || !trader) return log('Connect and select both accounts first.');
+    if (follower.type !== 'real' || trader.type !== 'real') return log('Automated copying requires real accounts. Demo accounts are not supported.');
     if (follower.id === trader.id || follower.type !== trader.type || follower.currency !== trader.currency) return log('Select different accounts with matching currency and account type.');
     if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(total) || total < limit) return log('Set positive limits; session stake budget must cover one maximum stake.');
     stop(); const generation = session.current.generation;
@@ -53,6 +54,7 @@ export function NewCopyTrading() {
     try {
       const urls = await Promise.all([copyConnection(appId.trim(), followerToken.trim(), follower.id), copyConnection(appId.trim(), traderToken.trim(), trader.id)]);
       if (!current()) return;
+      if (urls.some(result => new URL(result.url).pathname !== '/trading/v1/options/ws/real')) throw Error('Could not verify real accounts. Copying stopped.');
       for (const result of urls) {
         const socket = await CopySocket.open(result.url);
         if (!current()) { socket.close(); return; }
@@ -121,6 +123,6 @@ export function NewCopyTrading() {
     <div className="copy-trading-actions"><button disabled={locked || !followerId || !traderId} onClick={start}>Start copying</button><button onClick={() => { stop(); log('Stopped new copies. Purchases already sent and open contracts may still finish.'); }}>Stop copying</button></div>
     <p role="status">{active ? 'Connected — waiting for the trader’s next supported purchase.' : busy ? 'Connecting…' : 'Copying stopped.'}</p>
     <ul aria-live="polite">{messages.map((m, i) => <li key={i}>{m}</li>)}</ul>
-    <p className="copy-trading-footnote">Test with two demo accounts first. Reloading, leaving this page or backgrounding your iPhone stops new copies. Early closes and contract changes are not copied. Unsupported or stale entries are skipped. Tokens are not saved and are used only for Deriv authentication. Session budget limits total stakes, not net losses. No MT5 trades are copied.</p>
+    <p className="copy-trading-footnote">Automated copying is available only for real accounts. Reloading, leaving this page or backgrounding your iPhone stops new copies. Early closes and contract changes are not copied. Unsupported or stale entries are skipped. Tokens are not saved and are used only for Deriv authentication. Session budget limits total stakes, not net losses. No MT5 trades are copied.</p>
   </section>;
 }

@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     if (accountId) {
       const url = new URL(body.data?.url);
       if (url.protocol !== 'wss:' || url.hostname !== 'api.derivws.com' || !/^\/trading\/v1\/options\/ws\/(real|demo)$/.test(url.pathname)) throw Error('Invalid WebSocket URL');
+      if (url.pathname !== '/trading/v1/options/ws/real') return reply({ error: 'Automated copying requires a real account. Demo accounts are not supported.' }, 403);
       return reply({ url: url.toString() });
     }
     if (!Array.isArray(body.data)) throw Error('Invalid account response');
