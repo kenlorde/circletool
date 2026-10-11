@@ -96,7 +96,7 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
   }
   return <section className="space-y-5 rounded-2xl border p-4 sm:p-6" aria-label="Smart AI">
     <h2 className="text-2xl font-bold">Smart AI · {group === 'rise-fall' ? 'Rise/Fall' : group === 'over-under' ? 'Over/Under' : 'Even/Odd'} bot</h2>
-    <p className="text-muted-foreground">The bot buys your selected direction every cycle. A win resets the stake; a loss advances the stake list or applies the martingale multiplier. One contract runs at a time. There is no price-analysis entry filter.</p>
+    <p className="text-muted-foreground">The bot buys your selected direction every cycle. A win resets the stake; a loss advances the stake list or applies the martingale multiplier. One contract runs at a time.</p>
     <div className="rounded-xl border p-4"><p className="text-sm">Live price: <b>{market.currentTick?.quote ?? '—'}</b> · {directionLabel}{group === 'over-under' ? ` ${prediction}` : ''}</p></div>
     <div className="rounded-xl border p-5 space-y-4">
       <div className="grid grid-cols-2 gap-4">
