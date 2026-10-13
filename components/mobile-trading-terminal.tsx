@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Activity, BarChart3, BriefcaseBusiness, House, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
 import { AdvancedManualTrader } from './advanced-manual-trader';
 import { ManualTradeTypePicker } from './manual-trade-type-picker';
-import { isAdvancedTrade, type AdvancedTradeType } from '@/lib/manual-trades';
+import { ADVANCED_TYPES, isAdvancedTrade, type AdvancedTradeType } from '@/lib/manual-trades';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
 import type { ActiveSymbol, Tick, ProposalInfo, DurationLimits } from '@deriv/core';
 import type { ContractDigitResult } from '@/lib/contract-digit-result';
@@ -159,10 +159,14 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
             <span className="mobile-market-subquote">{currentTick ? Number(currentTick.quote).toFixed(pipSize) : 'Waiting for ticks…'} <span>▲</span></span>
           </div>
         </div>
-        {result && <div className={`mobile-contract-tick ${resultClass}`} role="status">
+        {!advancedType && result && <div className={`mobile-contract-tick ${resultClass}`} role="status">
           Tick {result.ticks} - <strong>{result.price.slice(0, -1)}<span>{result.digit}</span></strong>
         </div>}
-        <div className="mobile-digit-grid" aria-label="Last digit frequency">
+        {advancedType ? <div className="manual-spot-display">
+          <span>Live market price</span>
+          <strong>{currentTick ? Number(currentTick.quote).toFixed(pipSize) : '—'}</strong>
+          <small>{ADVANCED_TYPES.find(type => type.value === advancedType)?.label}</small>
+        </div> : <div className="mobile-digit-grid" aria-label="Last digit frequency">
           {cursorDigit !== null && <span className={`mobile-digit-cursor ${resultClass}`} style={cursorStyle} aria-label={`Cursor on digit ${cursorDigit}`} />}
           {digitStats.percentages.map((pct, digit) => {
             const selected = selectedDigit === digit;
@@ -186,7 +190,8 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
             );
           })}
         </div>
-        <div className="mobile-market-scroll" aria-hidden><ChevronLeft size={26} /><ChevronRight size={26} /></div>
+        }
+        {!advancedType && <div className="mobile-market-scroll" aria-hidden><ChevronLeft size={26} /><ChevronRight size={26} /></div>}
       </section>
 
       <section ref={tradeRef} className="mobile-trade" aria-label="Manual trading controls">
