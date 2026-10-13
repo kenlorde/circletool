@@ -13,11 +13,8 @@ export function ManualTradeTypePicker({ value, onChange, disabled = false }: { v
   return <Dialog open={open} onOpenChange={setOpen}>
     <div className="manual-type-select-row">
       <label htmlFor={selectId}>Trade type</label>
-      <select id={selectId} value={value} disabled={disabled} onChange={event => onChange(event.target.value as ManualTradeType)}>
-        {groups.map(group => <optgroup key={group} label={group}>{(group === 'Digits' ? DIGIT_TYPES : ADVANCED_TYPES.filter(type => type.group === group)).map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</optgroup>)}
-      </select>
+      <DialogTrigger asChild><button id={selectId} type="button" disabled={disabled} className="manual-type-trigger manual-type-current" aria-label={`Choose trade type: ${selected?.label ?? 'Select trade type'}`}><strong>{selected?.label ?? 'Select trade type'}</strong><ChevronDown size={20} aria-hidden /></button></DialogTrigger>
     </div>
-    <DialogTrigger asChild><button type="button" disabled={disabled} className="manual-type-trigger"><span><small>{selected?.label ?? 'Select trade type'}</small><strong>Browse all trade types</strong></span><ChevronDown size={20} aria-hidden /></button></DialogTrigger>
     <DialogContent className="manual-type-panel">
       <DialogTitle className="manual-type-heading">Trade types</DialogTitle>
       <DialogDescription className="sr-only">Choose a contract type for Manual Trader. Availability depends on your market and Deriv account.</DialogDescription>
