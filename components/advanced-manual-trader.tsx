@@ -28,6 +28,8 @@ const inputClass = 'w-full rounded-lg border border-border bg-background p-3 tex
 
 export function AdvancedManualTrader({ type, initialSymbol, onBusy, onSymbolChange }: { type: AdvancedTradeType; initialSymbol?: string; onSymbolChange?: (symbol: string) => void; onBusy?: (busy: boolean) => void }) {
   const { ws, isConnected, auth } = useDerivWSContext();
+  const realSession = useRef({ ws, accountId: auth.activeAccountId, canTrade: auth.authState === 'authenticated' && !!auth.wsUrl && auth.activeAccount?.account_type === 'real' && isConnected });
+  realSession.current = { ws, accountId: auth.activeAccountId, canTrade: auth.authState === 'authenticated' && !!auth.wsUrl && auth.activeAccount?.account_type === 'real' && isConnected };
   const definition = ADVANCED_TYPES.find(item => item.value === type)!;
   const [markets, setMarkets] = useState<Market[]>([]);
   const [symbol, setSymbol] = useState(initialSymbol ?? '');
@@ -136,10 +138,12 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy, onSymbolChan
   async function buy(contract: string) {
     if (buyLock.current || !ws || !isConnected || !validQuotes || !quoteSet || quoteSet.key !== currentKey.current) return;
     if (auth.authState !== 'authenticated') { await auth.login(); return; }
+    if (!realSession.current.canTrade || realSession.current.ws !== ws || realSession.current.accountId !== auth.activeAccountId) { setError('Please log in to your real account to trade. Demo trading is disabled.'); return; }
     const quote = quoteSet.quotes[contract];
     if (!quote || Date.now() - quoteSet.time >= 15000) return;
     buyLock.current = true; setBuying(true); setError(''); setReceipt(''); setQuoteSet(null);
     try {
+      if (!realSession.current.canTrade || realSession.current.ws !== ws || realSession.current.accountId !== auth.activeAccountId || currentKey.current !== key) throw new Error('Account or settings changed. Review a new quote before buying.');
       const response = await withTimeout(ws.send<{ buy?: { contract_id: number } }>({ buy: quote.id, price: String(quote.ask_price) }));
       if (!response.buy) throw new Error('No purchase confirmation returned. Check Positions before retrying.');
       setReceipt(`Contract ${response.buy.contract_id} purchased. View Positions to track or close it.`);
@@ -173,7 +177,7 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy, onSymbolChan
         return <div className={`manual-contract-card ${index === 0 ? 'direction-up' : 'direction-down'} flex flex-col gap-2 rounded-lg border border-border p-3`} key={contract}>
           <strong>{definition.directions[index]}</strong>
           {quote ? <><p className="text-sm">Price: {Number(quote.ask_price).toFixed(2)} {currency}</p>{definition.mode !== 'multiplier' && definition.mode !== 'accumulator' && definition.mode !== 'turbo' && type !== 'vanillas' ? <p className="text-sm">Payout: {Number(quote.payout ?? 0).toFixed(2)} {currency}</p> : null}{quote.barrier && <p className="text-sm">Barrier: {quote.barrier}</p>}{quote.payout_per_point != null && <p className="text-sm">Per point: {quote.payout_per_point} {currency}</p>}<p className="text-xs text-muted-foreground">{quote.longcode}</p></> : <p className="text-xs text-muted-foreground">{!available(contract) ? 'Unavailable for this market' : quoteSet?.key === key ? quoteSet.errors[contract] : 'Request a quote to view price and contract terms.'}</p>}
-          <button type="button" className="mt-auto rounded-lg border border-border bg-secondary p-3 font-semibold disabled:opacity-50" disabled={!quote || !validQuotes || busy || buying} onClick={() => buy(contract)}>{buying ? 'Purchasing…' : auth.authState === 'authenticated' ? `Buy ${definition.directions[index]}` : 'Log in to buy'}</button>
+          <button type="button" className="mt-auto rounded-lg border border-border bg-secondary p-3 font-semibold disabled:opacity-50" disabled={!quote || !validQuotes || busy || buying || (auth.authState === 'authenticated' && !realSession.current.canTrade)} onClick={() => buy(contract)}>{buying ? 'Purchasing…' : auth.authState === 'authenticated' ? realSession.current.canTrade ? `Buy ${definition.directions[index]}` : 'Real account required' : 'Log in to buy'}</button>
         </div>;
       })}
     </div>

@@ -14,8 +14,11 @@ interface UseBuyReturn {
 
 export function useBuy(
   ws: DerivWS | null,
-  isConnected: boolean
+  isConnected: boolean,
+  validatePurchase?: () => void
 ): UseBuyReturn {
+  const validation = useRef(validatePurchase);
+  validation.current = validatePurchase;
   const purchaseLock = useRef(false);
   const [isBuying, setIsBuying] = useState(false);
   const [buyResult, setBuyResult] = useState<BuyResult | null>(null);
@@ -35,10 +38,12 @@ export function useBuy(
     setBuyResult(null);
 
     try {
+      validation.current?.();
       const fresh = getFreshProposal ? await getFreshProposal() : proposal;
       if (!fresh.id || !Number.isFinite(fresh.askPrice) || fresh.askPrice <= 0) throw new Error('No valid purchase quote returned.');
       // Never pay above the price displayed when the user tapped Buy.
       if (fresh.askPrice > proposal.askPrice) throw new Error('Price changed. Review the updated quote and tap Buy again.');
+      validation.current?.();
       const response = await ws.send<BuyResponse>({
         buy: fresh.id,
         price: String(proposal.askPrice),

@@ -222,8 +222,12 @@ export function DigitsView({
       setShowLoginPrompt(true);
       return;
     }
+    if (activeAccount?.account_type !== 'real') {
+      toast.error('Please log in to your real account to trade. Demo trading is disabled.');
+      return;
+    }
     await buyContract(mode);
-  }, [editMode, authState, buyContract]);
+  }, [editMode, authState, activeAccount?.account_type, buyContract]);
 
   // Purchase feedback for the configurable layouts lives HERE, not in
   // ConfigurableDigitsControls: the desktop no-code layout mounts that
@@ -376,6 +380,11 @@ export function DigitsView({
       )}
       {/* Spacer to push content below fixed header — taller when authenticated (account bar visible) */}
       <div className={authState === 'authenticated' ? 'h-[60px] sm:h-[76px] shrink-0' : 'h-[60px] sm:h-[66px] shrink-0'} />
+
+      {!editMode && authState === 'authenticated' && activeAccount?.account_type !== 'real' && <div role="status" className="mx-3 my-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+        <p>Please log in to your real account to trade. Demo trading is disabled.</p>
+        <button type="button" className="mt-2 underline" onClick={() => { const real = accounts.find(account => account.account_type === 'real'); if (real) void onSwitchAccount(real.account_id); else void onLogin(); }}>Log in to real account</button>
+      </div>}
 
       {!editMode && isMobile ? (
         isLoading ? <Skeleton className="mx-3 h-[70vh] rounded-xl" /> : (

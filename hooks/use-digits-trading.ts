@@ -100,13 +100,14 @@ export type UseDigitsTradingParams = Pick<
   | 'isExhausted'
   | 'isAuthenticated'
   | 'onAuthWSFailed'
->;
+> & { isRealAccount?: boolean };
 
 export function useDigitsTrading({
   ws,
   isConnected,
   isExhausted,
   isAuthenticated,
+  isRealAccount = false,
   onAuthWSFailed,
 }: UseDigitsTradingParams): UseDigitsTradingReturn {
   const {
@@ -194,6 +195,8 @@ export function useDigitsTrading({
     return null;
   }, [currentTick, prices, pipSize]);
 
+  const realAccount = useRef(isAuthenticated && isRealAccount);
+  realAccount.current = isAuthenticated && isRealAccount;
   const {
     buyContract: buyWithProposal,
     isBuying,
@@ -202,7 +205,8 @@ export function useDigitsTrading({
     clearBuyResult,
   } = useBuy(
     tradingWs,
-    tradingIsConnected
+    tradingIsConnected,
+    () => { if (!realAccount.current) throw new Error('Please log in to your real account to trade. Demo trading is disabled.'); }
   );
 
   const proposalParams: ProposalParams | null =

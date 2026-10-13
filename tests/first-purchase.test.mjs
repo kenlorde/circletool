@@ -24,7 +24,7 @@ function fixture() {
     computeDigitStats: () => ({}), getLastDigit: () => 0,
   };
   vm.createContext(context); vm.runInContext(buySource + '\n' + hookSource, context);
-  const render = () => { cursor = 0; return context.useDigitsTrading({ ws: base.ws, isConnected: base.isConnected, isAuthenticated: true }); };
+  const render = () => { cursor = 0; return context.useDigitsTrading({ ws: base.ws, isConnected: base.isConnected, isAuthenticated: true, isRealAccount: base.isRealAccount ?? true }); };
   const finishQuote = (price = 10) => resolveQuote({ proposal: { id: 'fresh', ask_price: price, payout: 18 } });
   return { render, requests, base, finishQuote };
 }
@@ -61,4 +61,17 @@ for (const change of ['stake', 'digit', 'duration', 'account', 'disconnect']) {
 test('higher quote price is rejected without buying', async () => {
   const f = fixture(); const purchase = f.render().buyContract('DIGITOVER'); f.finishQuote(11); await purchase;
   assert.match(f.render().buyError, /Price changed/); assert.equal(f.requests.filter(r => r.buy).length, 0);
+});
+
+test('demo account cannot request or send a manual purchase', async () => {
+  const f = fixture(); f.base.isRealAccount = false;
+  await f.render().buyContract('DIGITOVER');
+  assert.match(f.render().buyError, /real account/);
+  assert.equal(f.requests.length, 0);
+});
+test('switching to demo while a quote is pending prevents the purchase', async () => {
+  const f = fixture(); const purchase = f.render().buyContract('DIGITOVER');
+  f.base.isRealAccount = false; f.render(); f.finishQuote(); await purchase;
+  assert.match(f.render().buyError, /real account/);
+  assert.equal(f.requests.some(request => request.buy), false);
 });
