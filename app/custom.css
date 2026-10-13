@@ -69,3 +69,9 @@
 .manual-type-group{margin-top:44px}.manual-type-group h2{font-size:19px;font-weight:750;padding:0 28px;margin-bottom:16px}.manual-type-option{display:flex;align-items:center;gap:22px;width:100%;text-align:left;padding:12px 28px;border-radius:7px;color:#bcbcbc;font-size:19px;min-height:65px}.manual-type-option:hover{background:#202222}.manual-type-option.selected{background:#333738;color:white;font-weight:700}
 .manual-type-icons{display:flex;gap:7px;flex-shrink:0;width:72px}.manual-type-icons i{display:flex;align-items:center;justify-content:center;width:32px;height:34px;border-radius:6px;background:#181b1c}.manual-type-icons svg{width:27px;height:27px;color:#ff5156}.manual-type-icons i:nth-child(2) svg{color:#94b8bb}
 @media(min-width:768px){.manual-type-panel{left:50%!important;top:8vh!important;transform:translateX(-50%)!important;width:620px!important;height:84vh;border-radius:14px!important;border:1px solid #303338!important}.manual-type-scroll{padding-bottom:35px}}
+
+/* Keep the manual digit circles and trade ticket close to the market selector. */
+@media (max-width: 1023px) {
+  .mobile-terminal .mobile-digit-grid { margin-top: 12px; }
+  .mobile-terminal .mobile-market { min-height: 0; padding-bottom: 44px; }
+}
