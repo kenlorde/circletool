@@ -1,3 +1,4 @@
+import { AppInstallationProvider } from '@/components/app-installation';
 import { RiskDisclaimer } from '@/components/custom/risk-disclaimer';
 import { AccessGate } from '@/components/custom/access-gate';
 import type { Metadata } from 'next';
@@ -21,7 +22,7 @@ export function generateMetadata(): Metadata {
     appleWebApp: { capable: true, title: 'Circletool', statusBarStyle: 'default' },
     icons: {
       ...(faviconUri ? { icon: faviconUri } : {}),
-      apple: [{ url: '/circletool-app-icon.png', type: 'image/png', sizes: '1254x1254' }],
+      apple: [{ url: '/app-icons/apple-touch-icon.png', type: 'image/png', sizes: '180x180' }],
     },
   };
 }
@@ -38,9 +39,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${fontClass} bg-background flex min-h-dvh flex-col overflow-hidden max-lg:h-dvh max-lg:overflow-hidden lg:block lg:h-auto lg:min-h-screen lg:overflow-x-hidden lg:overflow-y-auto`}
       >
         <TemplateI18nProvider>
-          <TemplateLayout>
+          <AppInstallationProvider><TemplateLayout>
             <LogoSrcProvider logoSrc={logoSrc}><AccessGate>{children}</AccessGate><RiskDisclaimer /></LogoSrcProvider>
-          </TemplateLayout>
+          </TemplateLayout></AppInstallationProvider>
         </TemplateI18nProvider>
       </body>
     </html>

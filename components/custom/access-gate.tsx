@@ -47,6 +47,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
   }, [verified, auth.authState, pathname, router]);
   // The provider owns login status. The cookie refresh protects server APIs;
   // failure of that secondary check must not relabel a logged-in user as logged out.
+  if (pathname === '/install') return <>{children}</>;
   if (auth.authState === 'authenticated' && pathname !== '/login') return <>
     {children}
     {error && <div role="status" className="fixed bottom-20 left-4 right-4 z-40 rounded-lg border bg-background p-3 text-sm">{error} <button className="underline" disabled={checking} onClick={() => setRetry(value => value + 1)}>{checking ? 'Retrying…' : 'Retry'}</button></div>}

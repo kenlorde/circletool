@@ -130,6 +130,7 @@ export function Header({
         <Link href="/tick-analysis" className="hidden xl:inline-flex text-sm font-medium hover:underline">Tick Analysis</Link>
         <Link href="/charts" className="hidden xl:inline-flex text-sm font-medium hover:underline">Charts</Link>
         <Link href="/academy" className="hidden xl:inline-flex text-sm font-medium hover:underline">Academy</Link>
+        <Link href="/install" className="hidden xl:inline-flex text-sm font-medium hover:underline">Install app</Link>
         <div className="hidden sm:block">{actions}</div>
         <div className="hidden sm:block"><LanguageSwitcher /></div>
         {isAuthenticated && activeAccount && (
@@ -228,6 +229,7 @@ export function Header({
           <Link href="/tick-analysis" onClick={() => setMobileMenuOpen(false)}>Tick Analysis</Link>
           <Link href="/charts" onClick={() => setMobileMenuOpen(false)}>Charts</Link>
           <Link href="/academy" onClick={() => setMobileMenuOpen(false)}>Academy</Link>
+          <Link href="/install" onClick={() => setMobileMenuOpen(false)}>Install Circletool app</Link>
           <div className="flex items-center justify-between gap-3"><span>{localize('Appearance')}</span>{actions}</div>
           <div className="flex items-center justify-between gap-3"><span>{localize('Language')}</span><LanguageSwitcher /></div>
           {isAuthenticated && <Button variant="outline" onClick={() => { onLogout(); setMobileMenuOpen(false); }}><Localize i18n_default_text="Log out" /></Button>}
