@@ -20,6 +20,8 @@ export function useProposal(
   const key = JSON.stringify(params);
   const proposal = isConnected && params && quote?.key === key && quote.ws === ws ? quote.proposal : null;
   const unsubRef = useRef<(() => void) | null>(null);
+  const retryAttempt = useRef(0);
+  const retryIdentity = useRef<{ ws: DerivWS | null; key: string } | null>(null);
 
   useEffect(() => {
     // Forget previous proposal subscription
@@ -33,6 +35,23 @@ export function useProposal(
     }
 
     let cancelled = false;
+    if (retryIdentity.current?.ws !== ws || retryIdentity.current?.key !== key) {
+      retryAttempt.current = 0;
+      retryIdentity.current = { ws, key };
+    }
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let quoteTimer: ReturnType<typeof setTimeout> | undefined;
+    const retry = () => {
+      if (cancelled || retryTimer !== undefined) return;
+      clearTimeout(quoteTimer);
+      setQuote(null);
+      const delay = Math.min(1000 * 2 ** Math.min(retryAttempt.current++, 4), 15000);
+      retryTimer = setTimeout(() => {
+        if (!cancelled) refresh();
+      }, delay);
+    };
+    // A silent request must recover too, without retrying any purchase.
+    quoteTimer = setTimeout(retry, 8000);
 
     const payload: Record<string, unknown> = {
       proposal: 1,
@@ -58,6 +77,10 @@ export function useProposal(
       if (cancelled) return;
       const resp = data as unknown as ProposalResponse;
       if (resp.proposal) {
+        clearTimeout(quoteTimer);
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+        retryAttempt.current = 0;
         setQuote({ key, ws, proposal: {
           receivedAt: Date.now(),
           id: resp.proposal.id,
@@ -75,11 +98,13 @@ export function useProposal(
         unsubRef.current = sub.unsubscribe;
       }
     }).catch(() => {
-      if (!cancelled) setQuote(null);
+      retry();
     });
 
     return () => {
       cancelled = true;
+      clearTimeout(quoteTimer);
+      clearTimeout(retryTimer);
       setQuote(null);
       if (unsubRef.current) {
         unsubRef.current();
