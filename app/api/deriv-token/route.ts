@@ -10,8 +10,7 @@ export async function POST(request: NextRequest) {
   }
   const params = new URLSearchParams(await request.text());
   const clientId = process.env.NEXT_PUBLIC_DERIV_APP_ID ?? '';
-  const redirectUri = (process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI ?? '')
-    .replace(/^https:\/\/circletool\.pro\/?$/i, 'https://circletool.pro');
+  const redirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI ?? '';
   const grant = params.get('grant_type');
   if (!clientId || params.get('client_id') !== clientId ||
       (grant !== 'authorization_code' && grant !== 'refresh_token')) {

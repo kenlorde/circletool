@@ -9,11 +9,12 @@ const loginEnd = source.indexOf('  // Invalidate unfinished',loginStart);
 const loginCode = stripTypeScriptTypes(source.slice(loginStart,loginEnd));
 test('original login and signup redirect without clearing an existing session',async()=>{
   const calls=[];
-  const context={useCallback:fn=>fn,currentLang:'en',getAuthConfigWithReferral:async lang=>({clientId:'test',lang}),
+  const context={useCallback:fn=>fn,currentLang:'en',getAuthConfig:lang=>({clientId:'test',lang}),getAuthConfigWithReferral:async lang=>({clientId:'test',lang}),
+    loginRedirectPending:{current:false},sessionVersion:{current:0},authActionPending:{current:false},setError(){},setAuthState(){},
     initiateLogin:async config=>calls.push(['login',config.lang]),initiateSignUp:async config=>calls.push(['signup',config.lang]),
     coreLogout:()=>{throw new Error('Login must not clear the session');},fetch:()=>{throw new Error('Login must not add a cookie deletion request');}};
   vm.createContext(context);vm.runInContext(loginCode+';globalThis.login=login;globalThis.signup=signUp;',context);
-  await context.login();await context.signup();assert.deepEqual(calls,[['login','en'],['signup','en']]);
+  await context.login();await context.login();await context.signup();assert.equal(context.sessionVersion.current,1);assert.deepEqual(calls,[['login','en'],['signup','en']]);
 });
 const storageSource = await readFile(new URL('../packages/core/src/auth/storage.ts', import.meta.url), 'utf8');
 const storageCode = stripTypeScriptTypes(storageSource.replace(/^import .*;\n/m,'').replaceAll('export ',''));
