@@ -93,3 +93,18 @@ for (const pending of [false, true]) test(pending ? 'restoration watchdog leaves
   if (pending) { assert.equal(callback,undefined);assert.equal(context.sessionVersion.current,3); }
   else { assert.equal(delay,25000);callback();assert.equal(context.sessionVersion.current,4);assert.equal(events.at(-1),'unauthenticated'); }
 });
+
+const completeStart = source.indexOf('    async (authInfo: AuthInfo, preferredAccountId?');
+const completeEnd = source.indexOf('\n    },\n    [fetchOTPUrl]', completeStart);
+const completeCode = stripTypeScriptTypes('const complete = '+source.slice(completeStart,completeEnd)+'};globalThis.complete=complete;');
+test('an old account request cannot erase a newer OAuth transaction',async()=>{
+  let finish; const events=[];
+  const context={sessionVersion:{current:0},fetchAccounts:()=>new Promise(resolve=>{finish=resolve;}),getAuthConfig:()=>({clientId:'test'}),
+    clearAllAuthData:()=>events.push('erased'),setAccounts:()=>events.push('accounts'),setActiveLoginId(){},setAccountType(){},setActiveAccountId(){},
+    fetchOTPUrl:async()=> 'ws',setWsUrl(){},setAuthState(){}};
+  vm.createContext(context);vm.runInContext(completeCode,context);
+  const pending=context.complete({access_token:'old'});
+  context.sessionVersion.current++;
+  finish([{account_id:'old-account',account_type:'real'}]);await pending;
+  assert.deepEqual(events,[]);
+});
