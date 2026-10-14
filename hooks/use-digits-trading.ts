@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useProposal, useBuy } from '@deriv/core';
 
 import type {
@@ -265,10 +265,18 @@ export function useDigitsTrading({
     'matches-differs': ['DIGITMATCH', 'DIGITDIFF'],
   };
   const [firstMode, secondMode] = modePair[tradeType];
-  const { proposal: firstProposal } = useProposal(tradingWs, tradingIsConnected,
+  const { proposal: firstProposal, refresh: refreshFirst } = useProposal(tradingWs, tradingIsConnected,
     proposalParams ? { ...proposalParams, contractType: firstMode } : null);
-  const { proposal: secondProposal } = useProposal(tradingWs, tradingIsConnected,
+  const { proposal: secondProposal, refresh: refreshSecond } = useProposal(tradingWs, tradingIsConnected,
     proposalParams ? { ...proposalParams, contractType: secondMode } : null);
+  // Prepare the next quotes after broker confirmation, outside the next tap's
+  // critical path. Both directions refresh in parallel; no purchase is retried.
+  useEffect(() => {
+    if (!buyResult) return;
+    refreshFirst?.();
+    refreshSecond?.();
+  }, [buyResult?.contractId, refreshFirst, refreshSecond]);
+
   // Direction buttons select a mode and purchase it in the same tap. The
   // explicit purchase mode is authoritative; that selection must not invalidate
   // its own quote request. All other settings and the account socket still lock.
@@ -279,6 +287,7 @@ export function useDigitsTrading({
   const currentSettings = useRef({ key: settingsKey, mode: contractMode, ws: tradingWs, connected: tradingIsConnected });
   currentSettings.current = { key: settingsKey, mode: contractMode, ws: tradingWs, connected: tradingIsConnected };
   const purchaseLock = useRef(false);
+  const consumedQuoteIds = useRef(new Set<string>());
   const modeProposals = { [firstMode]: firstProposal, [secondMode]: secondProposal };
   const buyContract = useCallback(async (mode?: ContractMode) => {
     const quote = mode === firstMode ? firstProposal : mode === secondMode ? secondProposal : mode ? null : proposal;
@@ -288,6 +297,27 @@ export function useDigitsTrading({
       const requestKey = settingsKey;
       const requestWs = tradingWs;
       const requestedMode = mode ?? contractMode;
+      const assertCurrentSettings = () => {
+        const current = currentSettings.current;
+        if (current.key !== requestKey || current.ws !== requestWs || !current.connected ||
+            (!mode && current.mode !== requestedMode)) {
+          throw new Error('Trade settings or connection changed. Review the quote and tap Buy again.');
+        }
+      };
+      const consume = (id: string) => {
+        consumedQuoteIds.current.add(id);
+        if (consumedQuoteIds.current.size > 100) {
+          const oldest = consumedQuoteIds.current.values().next().value;
+          if (oldest) consumedQuoteIds.current.delete(oldest);
+        }
+      };
+      assertCurrentSettings();
+      const age = quote.receivedAt === undefined ? Infinity : Date.now() - quote.receivedAt;
+      if (age >= 0 && age <= 5000 && !consumedQuoteIds.current.has(quote.id)) {
+        consume(quote.id);
+        await buyWithProposal(quote);
+        return;
+      }
       await buyWithProposal(quote, async () => {
         const response = await requestWs.send<ProposalResponse>({
           proposal: 1,
@@ -300,13 +330,10 @@ export function useDigitsTrading({
           duration_unit: proposalParams.durationUnit,
           ...(!['DIGITEVEN', 'DIGITODD'].includes(requestedMode) ? { barrier: selectedDigit } : {}),
         });
-        const current = currentSettings.current;
-        if (current.key !== requestKey || current.ws !== requestWs || !current.connected ||
-            (!mode && current.mode !== requestedMode)) {
-          throw new Error('Trade settings or connection changed. Review the quote and tap Buy again.');
-        }
+        assertCurrentSettings();
         const fresh = response.proposal;
         if (!fresh) throw new Error('No fresh purchase quote returned.');
+        consume(fresh.id);
         return {
           id: fresh.id, askPrice: Number(fresh.ask_price), payout: Number(fresh.payout),
           longcode: fresh.longcode,

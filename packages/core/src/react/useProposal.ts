@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DerivWS } from '../ws';
 import type { ProposalResponse, ProposalInfo, ProposalParams } from '../types';
 
 interface UseProposalReturn {
   proposal: ProposalInfo | null;
+  refresh: () => void;
 }
 
 export function useProposal(
@@ -13,9 +14,11 @@ export function useProposal(
   isConnected: boolean,
   params: ProposalParams | null
 ): UseProposalReturn {
-  const [quote, setQuote] = useState<{ key: string; proposal: ProposalInfo } | null>(null);
+  const [quote, setQuote] = useState<{ key: string; ws: DerivWS; proposal: ProposalInfo } | null>(null);
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision(value => value + 1), []);
   const key = JSON.stringify(params);
-  const proposal = isConnected && params && quote?.key === key ? quote.proposal : null;
+  const proposal = isConnected && params && quote?.key === key && quote.ws === ws ? quote.proposal : null;
   const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -55,10 +58,11 @@ export function useProposal(
       if (cancelled) return;
       const resp = data as unknown as ProposalResponse;
       if (resp.proposal) {
-        setQuote({ key, proposal: {
+        setQuote({ key, ws, proposal: {
+          receivedAt: Date.now(),
           id: resp.proposal.id,
-          askPrice: resp.proposal.ask_price,
-          payout: resp.proposal.payout,
+          askPrice: Number(resp.proposal.ask_price),
+          payout: Number(resp.proposal.payout),
           longcode: resp.proposal.longcode,
           minStake: parseFloat(resp.proposal.validation_params?.stake?.min ?? '0'),
           maxPayout: parseFloat(resp.proposal.validation_params?.payout?.max ?? '0'),
@@ -83,7 +87,7 @@ export function useProposal(
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally using individual param fields to avoid re-subscribing on object reference changes
-  }, [ws, isConnected, params?.contractType, params?.symbol, params?.amount, params?.duration, params?.durationUnit, params?.barrier, params?.basis, params?.currency, params?.dateExpiry]);
+  }, [ws, isConnected, params?.contractType, params?.symbol, params?.amount, params?.duration, params?.durationUnit, params?.barrier, params?.basis, params?.currency, params?.dateExpiry, revision]);
 
-  return { proposal };
+  return { proposal, refresh };
 }

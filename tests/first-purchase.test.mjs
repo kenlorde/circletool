@@ -6,27 +6,28 @@ import vm from 'node:vm';
 
 const hookSource = stripTypeScriptTypes((await readFile(new URL('../hooks/use-digits-trading.ts', import.meta.url), 'utf8')).replace(/^import[\s\S]*?;\n/gm, '').replace('export function useDigitsTrading', 'function useDigitsTrading'));
 const buySource = stripTypeScriptTypes((await readFile(new URL('../packages/core/src/react/useBuy.ts', import.meta.url), 'utf8')).replace(/^import[\s\S]*?;\n/gm, '').replace('export function useBuy', 'function useBuy'));
-function fixture() {
+function fixture(recent = false, deferredBuy = false) {
   const slots = []; let cursor = 0;
-  const requests = []; let resolveQuote;
+  const requests = []; let resolveQuote, resolveBuy;
   const ws = { async send(request) {
     requests.push(request);
     if (request.proposal) return new Promise(resolve => { resolveQuote = resolve; });
+    if (deferredBuy) return new Promise(resolve => { resolveBuy = resolve; });
     return { buy: { contract_id: 42, buy_price: 10, payout: 18 } };
   } };
   const base = { ws, isConnected: true, activeSymbol: { underlying_symbol: '1HZ100V' }, prices: [], currentTick: null, pipSize: 2 };
   const context = {
     useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => { slots[i] = value; }]; },
     useRef(initial) { const i = cursor++; if (!(i in slots)) slots[i] = { current: initial }; return slots[i]; },
-    useMemo: fn => fn(), useCallback: fn => fn,
+    useMemo: fn => fn(), useCallback: fn => fn, useEffect() {}, Date, Set,
     useBaseTrading: () => base,
-    useProposal: () => ({ proposal: { id: 'displayed', askPrice: 10, payout: 18 } }),
+    useProposal: () => ({ proposal: { id: 'displayed', askPrice: 10, payout: 18, ...(recent ? {receivedAt:Date.now()} : {}) } }),
     computeDigitStats: () => ({}), getLastDigit: () => 0,
   };
   vm.createContext(context); vm.runInContext(buySource + '\n' + hookSource, context);
   const render = () => { cursor = 0; return context.useDigitsTrading({ ws: base.ws, isConnected: base.isConnected, isAuthenticated: true, isRealAccount: base.isRealAccount ?? true }); };
   const finishQuote = (price = 10) => resolveQuote({ proposal: { id: 'fresh', ask_price: price, payout: 18 } });
-  return { render, requests, base, finishQuote };
+  return { render, requests, base, finishQuote, finishBuy:()=>resolveBuy({buy:{contract_id:42,buy_price:10,payout:18}}) };
 }
 for (const [type, mode] of [['over-under', 'DIGITUNDER'], ['even-odd', 'DIGITODD'], ['matches-differs', 'DIGITDIFF']]) {
   test(`first tap purchases ${mode} and permits the next trade`, async () => {
@@ -74,4 +75,30 @@ test('switching to demo while a quote is pending prevents the purchase', async (
   f.base.isRealAccount = false; f.render(); f.finishQuote(); await purchase;
   assert.match(f.render().buyError, /real account/);
   assert.equal(f.requests.some(request => request.buy), false);
+});
+
+for (const mode of ['DIGITOVER','DIGITUNDER','DIGITEVEN','DIGITODD','DIGITMATCH','DIGITDIFF']) {
+ test(`recent ${mode} quote sends buy without waiting for another proposal`,async()=>{
+  const f=fixture(true);let h=f.render();h.setTradeType(mode==='DIGITEVEN'||mode==='DIGITODD'?'even-odd':mode==='DIGITMATCH'||mode==='DIGITDIFF'?'matches-differs':'over-under');h=f.render();
+  const pending=h.buyContract(mode);
+  assert.equal(f.requests.length,1);assert.equal(f.requests[0].buy,'displayed');assert.equal(f.requests[0].price,'10');await pending;
+  assert.equal(f.render().buyResult.contractId,42);
+ });
+}
+test('a consumed quote is not reused for the next purchase',async()=>{
+ const f=fixture(true);await f.render().buyContract('DIGITUNDER');
+ const second=f.render().buyContract('DIGITUNDER');assert.equal(f.requests.at(-1).proposal,1);f.finishQuote();await second;
+ assert.equal(f.requests.filter(r=>r.buy).length,2);assert.equal(f.requests.at(-1).buy,'fresh');
+});
+test('fast path still blocks duplicate taps and demo accounts',async()=>{
+ const f=fixture(true),h=f.render();const first=h.buyContract('DIGITUNDER');await h.buyContract('DIGITUNDER');await first;
+ assert.equal(f.requests.filter(r=>r.buy).length,1);
+ const demo=fixture(true);demo.base.isRealAccount=false;await demo.render().buyContract('DIGITUNDER');assert.equal(demo.requests.length,0);
+});
+
+test('fast buy stays locked until broker confirmation, then releases without waiting for settlement',async()=>{
+ const f=fixture(true,true);const first=f.render().buyContract('DIGITUNDER');
+ assert.equal(f.requests[0].buy,'displayed');assert.equal(f.render().isBuying,true);
+ await f.render().buyContract('DIGITUNDER');assert.equal(f.requests.length,1);
+ f.finishBuy();await first;assert.equal(f.render().isBuying,false);assert.equal(f.render().buyResult.contractId,42);
 });
