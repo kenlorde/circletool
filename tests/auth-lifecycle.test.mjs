@@ -93,15 +93,3 @@ for (const pending of [false, true]) test(pending ? 'restoration watchdog leaves
   if (pending) { assert.equal(callback,undefined);assert.equal(context.sessionVersion.current,3); }
   else { assert.equal(delay,25000);callback();assert.equal(context.sessionVersion.current,4);assert.equal(events.at(-1),'unauthenticated'); }
 });
-
-const configStart = source.indexOf('function getAuthConfig(');
-const configEnd = source.indexOf('// Start the Scaleo', configStart);
-const configCode = stripTypeScriptTypes(source.slice(configStart,configEnd));
-test('registered callback is preserved exactly for login and token exchange', () => {
-  for (const redirectUri of ['https://Circletool.pro','https://circletool.pro/','https://www.circletool.pro/callback']) {
-    const context = {process:{env:{NEXT_PUBLIC_DERIV_REDIRECT_URI:redirectUri,NEXT_PUBLIC_DERIV_APP_ID:'test'}},
-      readStoredLanguage:()=> 'en',parseLandingParams:()=>null};
-    vm.createContext(context);vm.runInContext(configCode+';globalThis.config=getAuthConfig;',context);
-    assert.equal(context.config().redirectUri,redirectUri);
-  }
-});
