@@ -78,3 +78,18 @@ for(const callback of [false,true]) test(callback ? 'an incoming callback is not
   assert.equal(context.authActionPending.current,callback);
   assert.equal(states.length,callback?0:1);assert.equal(errors.length,callback?0:1);
 });
+
+const watchdogStart = source.indexOf('  // Bound session restoration');
+const watchdogEnd = source.indexOf('  // Keep ref in sync', watchdogStart);
+const watchdogCode = stripTypeScriptTypes(source.slice(watchdogStart, watchdogEnd));
+for (const pending of [false, true]) test(pending ? 'restoration watchdog leaves an explicit OAuth redirect alone' : 'restoration timeout releases login and invalidates late responses', () => {
+  const events = []; let callback; let delay;
+  const context = { useEffect: fn => fn(), authState:'authenticating', authActionPending:{current:pending},
+    sessionVersion:{current:3}, setTimeout:(fn,ms)=>{callback=fn;delay=ms;return 1;},clearTimeout(){},
+    clearAllAuthData:()=>events.push('clear'),setAccounts(){},setActiveAccountId(){},setWsUrl(){},
+    cleanupUrl(){},getAuthConfig:()=>({redirectUri:'https://circletool.pro'}),
+    setError:message=>events.push(message),setAuthState:state=>events.push(state) };
+  vm.createContext(context);vm.runInContext(watchdogCode,context);
+  if (pending) { assert.equal(callback,undefined);assert.equal(context.sessionVersion.current,3); }
+  else { assert.equal(delay,25000);callback();assert.equal(context.sessionVersion.current,4);assert.equal(events.at(-1),'unauthenticated'); }
+});
