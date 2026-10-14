@@ -11,8 +11,14 @@ test('login uses documented OAuth parameters with new PKCE state; signup keeps r
   const context={URLSearchParams,generateRandomBase64url:()=>`random-${++counter}`,sha256Base64url:async v=>`hash-${v}`,
     storeCSRFToken:v=>states.push(v),storeCodeVerifier:v=>verifiers.push(v),getAuthBaseUrl:()=> 'https://auth.deriv.com/oauth2'};
   vm.createContext(context);vm.runInContext(code+';globalThis.login=buildAuthorizationUrl;globalThis.signup=buildSignUpUrl;',context);
-  const config={clientId:'test',redirectUri:'https://circletool.pro'};
+  const config={clientId:'34sx1mCIH1fzAzMm8Ou9Q',redirectUri:'https://circletool.pro',affiliateToken:'referral',utmSource:'partner',lang:'en'};
   const first=new URL(await context.login(config)),second=new URL(await context.login(config)),signup=new URL(await context.signup(config));
+  assert.equal(first.searchParams.get('client_id'),config.clientId);
+  assert.equal(first.searchParams.get('redirect_uri'),'https://circletool.pro');
+  assert.equal(first.searchParams.get('lang'),'EN');
+  assert.equal(first.searchParams.has('t'),false);
+  assert.equal(first.searchParams.has('utm_source'),false);
+  assert.equal(signup.searchParams.get('t'),'referral');
   assert.equal(first.searchParams.has('prompt'),false);assert.equal(first.searchParams.has('max_age'),false);
   assert.notEqual(first.searchParams.get('state'),second.searchParams.get('state'));
   assert.equal(first.searchParams.get('code_challenge_method'),'S256');
