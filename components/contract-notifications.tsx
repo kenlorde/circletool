@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { BuyResult } from '@deriv/core';
 import type { ContractMode, OpenPosition } from '@/lib/types';
 
@@ -26,6 +27,9 @@ export function ContractNotifications({
   marketName: string;
 }) {
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
   const purchases = useRef(new Map<number, { description: string; closed: boolean }>());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -73,7 +77,9 @@ export function ContractNotifications({
     }
   }, [buyResult, positions, contractMode, marketName]);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div className="contract-notices" role="status" aria-live="polite" aria-atomic="false">
       {notices.map((notice) => (
         <div key={notice.id} className={`contract-notice ${notice.closed ? notice.amount >= 0 ? 'won' : 'lost' : ''}`}>
@@ -84,6 +90,7 @@ export function ContractNotifications({
           {notice.closed && <span className="contract-notice-time">now</span>}
         </div>
       ))}
-    </div>
+    </div>,
+    document.body
   );
 }
