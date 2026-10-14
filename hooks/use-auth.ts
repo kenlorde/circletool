@@ -179,7 +179,7 @@ export function useAuth(): UseAuthReturn {
     async (authInfo: AuthInfo, preferredAccountId?: string | null) => {
       const version = sessionVersion.current;
       const fetchedAccounts = await fetchAccounts(authInfo, getAuthConfig().clientId);
-      if (version !== sessionVersion.current) { clearAllAuthData(); return; }
+      if (version !== sessionVersion.current) return;
       if (!fetchedAccounts.length) throw new Error("No trading accounts are available. Please log in again.");
       setAccounts(fetchedAccounts);
 
@@ -193,7 +193,7 @@ export function useAuth(): UseAuthReturn {
         setActiveAccountId(selectedAccount.account_id);
 
         const otpUrl = await fetchOTPUrl(selectedAccount.account_id, authInfo);
-        if (version !== sessionVersion.current) { clearAllAuthData(); return; }
+        if (version !== sessionVersion.current) return;
         setWsUrl(otpUrl);
       }
 
@@ -220,7 +220,7 @@ export function useAuth(): UseAuthReturn {
       setActiveAccountId(loginId);
       try {
         const otpUrl = await fetchOTPUrl(loginId, authInfo);
-        if (version !== sessionVersion.current) { clearAllAuthData(); return false; }
+        if (version !== sessionVersion.current) return false;
         setWsUrl(otpUrl);
         setAuthState('authenticated');
         return true;
@@ -246,7 +246,7 @@ export function useAuth(): UseAuthReturn {
         setAuthState('authenticating');
         try {
           const authInfo = await handleOAuthCallback(window.location.href, getAuthConfig());
-          if (version !== sessionVersion.current) { clearAllAuthData(); return; }
+          if (version !== sessionVersion.current) return;
           await completeAuth(authInfo);
         } catch (err) {
           if (version !== sessionVersion.current) return;
@@ -279,7 +279,7 @@ export function useAuth(): UseAuthReturn {
             setAuthState('unauthenticated');
             return;
           }
-          if (version !== sessionVersion.current) { clearAllAuthData(); return; }
+          if (version !== sessionVersion.current) return;
           try {
             await completeAuth(refreshed, getActiveLoginId());
           } catch {
