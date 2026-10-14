@@ -79,6 +79,8 @@ export interface ProposalResponse {
 }
 
 export interface ProposalInfo {
+  /** Client receipt time used to avoid an extra request for a recent quote. */
+  receivedAt?: number;
   id: string;
   askPrice: number;
   payout: number;
