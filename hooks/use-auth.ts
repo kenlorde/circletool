@@ -407,24 +407,9 @@ export function useAuth(): UseAuthReturn {
     };
   }, [authState]);
 
-  // Login starts directly; referral resolution belongs to sign-up only.
+  // September 21 login and sign-up actions.
   const login = useCallback(async () => {
-    if (loginRedirectPending.current) return;
-    // Invalidate session-restoration work before creating a fresh PKCE pair.
-    // A late restoration failure must not erase this login's state/verifier.
-    sessionVersion.current += 1;
-    loginRedirectPending.current = true;
-    authActionPending.current = true;
-    setError(null);
-    setAuthState('authenticating');
-    try {
-      await initiateLogin(getAuthConfig(currentLang));
-    } catch (problem) {
-      loginRedirectPending.current = false;
-      authActionPending.current = false;
-      setAuthState('unauthenticated');
-      throw problem;
-    }
+    await initiateLogin(await getAuthConfigWithReferral(currentLang));
   }, [currentLang]);
 
   // Initiate sign-up — adds prompt=registration and partner attribution params
