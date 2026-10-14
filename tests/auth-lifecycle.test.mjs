@@ -4,37 +4,16 @@ import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
 const source = await readFile(new URL('../hooks/use-auth.ts', import.meta.url), 'utf8');
-const start = source.indexOf('async (signUp = false) =>');
-const action = stripTypeScriptTypes('const startAuth = ' + source.slice(start, source.indexOf('}, [currentLang]);', start) + 1) + '; globalThis.startAuth = startAuth;');
-function setup(resolveConfig) {
-  const states = [], redirects = [];
-  const context = { loginRedirectPending:{current:false}, coreLogout:()=>redirects.push('clear'), activeAccountIdRef:{current:null}, setAccounts(){},setActiveAccountId(){},setWsUrl(){}, fetch:async()=>({ok:true}), AbortSignal, authActionPending: { current: false }, sessionVersion: { current: 0 }, currentLang: 'en',
-    setError() {}, setAuthState: value => states.push(value), getAuthConfigWithReferral: resolveConfig,
-    initiateLogin: async () => redirects.push('login'), initiateSignUp: async () => redirects.push('signup') };
-  vm.createContext(context); vm.runInContext(action, context);
-  return { context, states, redirects };
-}
-test('rapid login taps start one OAuth redirect', async () => {
-  let finish;
-  const flow = setup(() => new Promise(resolve => { finish = resolve; }));
-  const first = flow.context.startAuth(); await flow.context.startAuth();
-  finish({clientId:'test'}); await first;
-  assert.deepEqual(flow.redirects, ['clear','login']);
-});
-test('logout cancels a pending login redirect', async () => {
-  let finish;
-  const flow = setup(() => new Promise(resolve => { finish = resolve; }));
-  const first = flow.context.startAuth(); flow.context.sessionVersion.current++;
-  finish({clientId:'test'}); await first;
-  assert.deepEqual(flow.redirects, ['clear']);
-});
-test('failed login releases the lock and allows retry', async () => {
-  let attempt = 0;
-  const flow = setup(async () => { if (!attempt++) throw new Error('Network failed'); return {clientId:'test'}; });
-  await flow.context.startAuth();
-  assert.equal(flow.context.authActionPending.current,false);
-  assert.equal(flow.states.at(-1),'unauthenticated');
-  await flow.context.startAuth(); assert.deepEqual(flow.redirects,['clear','clear','login']);
+const loginStart = source.indexOf('  const login = useCallback(async () => {');
+const loginEnd = source.indexOf('  // Invalidate unfinished',loginStart);
+const loginCode = stripTypeScriptTypes(source.slice(loginStart,loginEnd));
+test('original login and signup redirect without clearing an existing session',async()=>{
+  const calls=[];
+  const context={useCallback:fn=>fn,currentLang:'en',getAuthConfigWithReferral:async lang=>({clientId:'test',lang}),
+    initiateLogin:async config=>calls.push(['login',config.lang]),initiateSignUp:async config=>calls.push(['signup',config.lang]),
+    coreLogout:()=>{throw new Error('Login must not clear the session');},fetch:()=>{throw new Error('Login must not add a cookie deletion request');}};
+  vm.createContext(context);vm.runInContext(loginCode+';globalThis.login=login;globalThis.signup=signUp;',context);
+  await context.login();await context.signup();assert.deepEqual(calls,[['login','en'],['signup','en']]);
 });
 const storageSource = await readFile(new URL('../packages/core/src/auth/storage.ts', import.meta.url), 'utf8');
 const storageCode = stripTypeScriptTypes(storageSource.replace(/^import .*;\n/m,'').replaceAll('export ',''));
@@ -57,14 +36,6 @@ test('logout clears local session immediately and waits for cookie removal befor
   assert.deepEqual(events,['clear']); assert.equal(context.sessionVersion.current,1); assert.equal(context.activeAccountIdRef.current,null);
   finish({ok:true}); await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(events,['clear','/login']);
-});
-test('login does not redirect if the previous server session cannot be cleared',async()=>{
-  const flow=setup(async()=>({clientId:'test'}));
-  flow.context.fetch=async()=>({ok:false});
-  await flow.context.startAuth();
-  assert.deepEqual(flow.redirects,['clear']);
-  assert.equal(flow.context.authActionPending.current,false);
-  assert.equal(flow.states.at(-1),'unauthenticated');
 });
 const recoveryStart=source.indexOf('    const recoverInterruptedLogin = () => {');
 const recoveryEnd=source.indexOf('\n    const onVisibility',recoveryStart);
