@@ -314,6 +314,25 @@ export function useAuth(): UseAuthReturn {
     init();
   }, [completeAuth, fetchOTPUrl, restoreCachedSession]);
 
+  // Bound session restoration independently of the individual network calls.
+  // A failed account fetch followed by an OTP retry must not lock the login UI.
+  useEffect(() => {
+    if (authState !== 'authenticating' || authActionPending.current) return;
+    const version = sessionVersion.current;
+    const timer = setTimeout(() => {
+      if (version !== sessionVersion.current || authActionPending.current) return;
+      sessionVersion.current += 1;
+      clearAllAuthData();
+      setAccounts([]);
+      setActiveAccountId(null);
+      setWsUrl(undefined);
+      cleanupUrl(getAuthConfig().redirectUri);
+      setError('Your session could not be restored. Please log in again.');
+      setAuthState('unauthenticated');
+    }, 25000);
+    return () => clearTimeout(timer);
+  }, [authState]);
+
   // Keep ref in sync so visibility handler always has the current account ID
   useEffect(() => {
     activeAccountIdRef.current = activeAccountId;
@@ -364,7 +383,6 @@ export function useAuth(): UseAuthReturn {
       if (!loginRedirectPending.current || !authActionPending.current) return;
       const params = new URL(window.location.href).searchParams;
       if (params.has('code') || params.has('error')) return;
-      loginRedirectPending.current = false;
       loginRedirectPending.current = false;
       authActionPending.current = false;
       setAuthState('unauthenticated');
