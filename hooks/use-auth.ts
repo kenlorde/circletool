@@ -28,12 +28,9 @@ import { readStoredLanguage } from '@/lib/i18n';
 function getAuthConfig(lang?: string): AuthConfig {
   const configuredRedirectUri = process.env.NEXT_PUBLIC_DERIV_REDIRECT_URI ??
     (typeof window !== 'undefined' ? window.location.origin : '');
-  // Match Circletool's registered OAuth callback exactly, including casing
-  // and the absence of a trailing slash, for both authorization and exchange.
-  const redirectUri = configuredRedirectUri.replace(
-    /^https:\/\/circletool\.pro\/?$/i,
-    'https://circletool.pro'
-  );
+  // OAuth providers compare the registered callback string exactly. Preserve
+  // its casing and trailing slash for authorization and token exchange.
+  const redirectUri = configuredRedirectUri;
   const config: AuthConfig = {
     clientId: process.env.NEXT_PUBLIC_DERIV_APP_ID ?? '',
     redirectUri,
@@ -410,11 +407,24 @@ export function useAuth(): UseAuthReturn {
     };
   }, [authState]);
 
-  // Phase 1: Initiate login — includes partner attribution params, resolving a
-  // fresh per-user Scaleo token via the BFF proxy when needed (non-blocking).
-  // Forwards `lang` so Deriv's home app continues in the selected language (#559).
+  // Login starts directly; referral resolution belongs to sign-up only.
   const login = useCallback(async () => {
-    await initiateLogin(await getAuthConfigWithReferral(currentLang));
+    if (loginRedirectPending.current) return;
+    // Invalidate session-restoration work before creating a fresh PKCE pair.
+    // A late restoration failure must not erase this login's state/verifier.
+    sessionVersion.current += 1;
+    loginRedirectPending.current = true;
+    authActionPending.current = true;
+    setError(null);
+    setAuthState('authenticating');
+    try {
+      await initiateLogin(getAuthConfig(currentLang));
+    } catch (problem) {
+      loginRedirectPending.current = false;
+      authActionPending.current = false;
+      setAuthState('unauthenticated');
+      throw problem;
+    }
   }, [currentLang]);
 
   // Initiate sign-up — adds prompt=registration and partner attribution params

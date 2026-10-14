@@ -9,15 +9,18 @@ const ACCOUNT_TYPE_KEY = 'account_type';
 
 const TOKEN_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
+// Short-lived same-origin fallback supports callbacks opened in a new browser tab.
+// State validation and the ten-minute expiry apply to both storage locations.
 // --- CSRF Token ---
 
 export function storeCSRFToken(token: string): void {
   const stored: StoredCSRFToken = { value: token, createdAt: Date.now() };
   sessionStorage.setItem(CSRF_TOKEN_KEY, JSON.stringify(stored));
+  localStorage.setItem(CSRF_TOKEN_KEY, JSON.stringify(stored));
 }
 
 export function getCSRFToken(): string | null {
-  const raw = sessionStorage.getItem(CSRF_TOKEN_KEY);
+  const raw = sessionStorage.getItem(CSRF_TOKEN_KEY) ?? localStorage.getItem(CSRF_TOKEN_KEY);
   if (!raw) return null;
 
   const stored: StoredCSRFToken = JSON.parse(raw);
@@ -30,6 +33,7 @@ export function getCSRFToken(): string | null {
 
 export function clearCSRFToken(): void {
   sessionStorage.removeItem(CSRF_TOKEN_KEY);
+  localStorage.removeItem(CSRF_TOKEN_KEY);
 }
 
 // --- PKCE Code Verifier ---
@@ -37,10 +41,11 @@ export function clearCSRFToken(): void {
 export function storeCodeVerifier(verifier: string): void {
   const stored: StoredCodeVerifier = { value: verifier, createdAt: Date.now() };
   sessionStorage.setItem(CODE_VERIFIER_KEY, JSON.stringify(stored));
+  localStorage.setItem(CODE_VERIFIER_KEY, JSON.stringify(stored));
 }
 
 export function getCodeVerifier(): string | null {
-  const raw = sessionStorage.getItem(CODE_VERIFIER_KEY);
+  const raw = sessionStorage.getItem(CODE_VERIFIER_KEY) ?? localStorage.getItem(CODE_VERIFIER_KEY);
   if (!raw) return null;
 
   const stored: StoredCodeVerifier = JSON.parse(raw);
@@ -53,6 +58,7 @@ export function getCodeVerifier(): string | null {
 
 export function clearCodeVerifier(): void {
   sessionStorage.removeItem(CODE_VERIFIER_KEY);
+  localStorage.removeItem(CODE_VERIFIER_KEY);
 }
 
 // --- Auth Info ---
