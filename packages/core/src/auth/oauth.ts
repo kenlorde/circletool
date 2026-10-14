@@ -157,8 +157,9 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams): Promis
     code_verifier: params.codeVerifier,
   });
 
-  const response = await fetch(`${getAuthBaseUrl()}/token`, {
+  const response = await fetch('/api/deriv-token', {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   });
@@ -197,8 +198,9 @@ export async function refreshAccessToken(
     client_id: clientId,
   });
 
-  const response = await fetch(`${getAuthBaseUrl()}/token`, {
+  const response = await fetch('/api/deriv-token', {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   });
