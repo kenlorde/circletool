@@ -39,20 +39,20 @@ test('a rejected quote retries automatically and recovers without sending a buy'
  const f=fixture(),ws=socket();let fail=true;
  const subscribe=ws.subscribe;ws.subscribe=(...args)=>fail?Promise.reject(new Error('Temporary failure')):subscribe(...args);
  f.render(ws);f.flush();await Promise.resolve();await Promise.resolve();
- assert.equal(f.render(ws).proposal,null);assert.equal(f.runTimer(),1000);
+ assert.equal(f.render(ws).proposal,null);assert.equal(f.runTimer(),250);
  fail=false;f.render(ws);f.flush();ws.handlers[0](response);
  assert.equal(f.render(ws).proposal.id,'quote');assert.equal(f.timers.size,0);
  assert.ok(ws.requests.every(request=>request.proposal===1&&!request.buy));
 });
 test('silent requests recover and late replies from cancelled attempts are ignored',()=>{
  const f=fixture(),ws=socket();f.render(ws);f.flush();
- assert.equal(f.runTimer(),8000);assert.equal(f.runTimer(),1000);
+ assert.equal(f.runTimer(),3000);assert.equal(f.runTimer(),250);
  f.render(ws);f.flush();ws.handlers[0](response);assert.equal(f.render(ws).proposal,null);
  ws.handlers[1](response);assert.equal(f.render(ws).proposal.id,'quote');
 });
 test('repeated failures back off and cleanup cancels retries',async()=>{
  const f=fixture(),ws={subscribe:()=>Promise.reject(new Error('Unavailable'))};
- for(const delay of [1000,2000,4000,8000,15000,15000]){
+ for(const delay of [250,500,1000,2000,4000,8000,8000]){
   f.render(ws);f.flush();await Promise.resolve();await Promise.resolve();assert.equal(f.runTimer(),delay);
  }
  f.render(ws);f.flush();await Promise.resolve();await Promise.resolve();f.dispose();assert.equal(f.timers.size,0);

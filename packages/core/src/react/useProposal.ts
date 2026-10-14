@@ -45,13 +45,13 @@ export function useProposal(
       if (cancelled || retryTimer !== undefined) return;
       clearTimeout(quoteTimer);
       setQuote(null);
-      const delay = Math.min(1000 * 2 ** Math.min(retryAttempt.current++, 4), 15000);
+      const delay = Math.min(250 * 2 ** Math.min(retryAttempt.current++, 5), 8000);
       retryTimer = setTimeout(() => {
         if (!cancelled) refresh();
       }, delay);
     };
     // A silent request must recover too, without retrying any purchase.
-    quoteTimer = setTimeout(retry, 8000);
+    quoteTimer = setTimeout(retry, 3000);
 
     const payload: Record<string, unknown> = {
       proposal: 1,
