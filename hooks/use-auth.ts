@@ -413,37 +413,14 @@ export function useAuth(): UseAuthReturn {
   // Phase 1: Initiate login — includes partner attribution params, resolving a
   // fresh per-user Scaleo token via the BFF proxy when needed (non-blocking).
   // Forwards `lang` so Deriv's home app continues in the selected language (#559).
-  const startAuth = useCallback(async (signUp = false) => {
-    if (authActionPending.current) return;
-    authActionPending.current = true;
-    const version = ++sessionVersion.current;
-    // Every explicit login begins without the previous user's account or token.
-    coreLogout();
-    activeAccountIdRef.current = null;
-    setAccounts([]);
-    setActiveAccountId(null);
-    setWsUrl(undefined);
-    setError(null);
-    setAuthState('authenticating');
-    try {
-      const config = await getAuthConfigWithReferral(currentLang);
-      if (version !== sessionVersion.current) return;
-      if (!config.clientId) throw new Error('Deriv login is not configured.');
-      const response = await fetch('/api/access-session', { method: 'DELETE', signal: AbortSignal.timeout(10000) });
-      if (version !== sessionVersion.current) return;
-      if (!response.ok) throw new Error('Could not clear the previous account. Please try again.');
-      loginRedirectPending.current = true;
-      await (signUp ? initiateSignUp(config) : initiateLogin(config));
-    } catch (problem) {
-      if (version !== sessionVersion.current) return;
-      loginRedirectPending.current = false;
-      authActionPending.current = false;
-      setAuthState('unauthenticated');
-      setError(problem instanceof Error ? problem.message : 'Could not open Deriv login. Please try again.');
-    }
+  const login = useCallback(async () => {
+    await initiateLogin(await getAuthConfigWithReferral(currentLang));
   }, [currentLang]);
-  const login = useCallback(() => startAuth(), [startAuth]);
-  const signUp = useCallback(() => startAuth(true), [startAuth]);
+
+  // Initiate sign-up — adds prompt=registration and partner attribution params
+  const signUp = useCallback(async () => {
+    await initiateSignUp(await getAuthConfigWithReferral(currentLang));
+  }, [currentLang]);
 
   // Invalidate unfinished auth/account requests before clearing the session.
   const logout = useCallback(() => {
