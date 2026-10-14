@@ -16,8 +16,8 @@ test('login uses documented OAuth parameters with new PKCE state; signup keeps r
   assert.equal(first.searchParams.get('client_id'),config.clientId);
   assert.equal(first.searchParams.get('redirect_uri'),'https://circletool.pro');
   assert.equal(first.searchParams.get('lang'),'EN');
-  assert.equal(first.searchParams.has('t'),false);
-  assert.equal(first.searchParams.has('utm_source'),false);
+  assert.equal(first.searchParams.get('t'),'referral');
+  assert.equal(first.searchParams.get('utm_source'),'partner');
   assert.equal(signup.searchParams.get('t'),'referral');
   assert.equal(first.searchParams.has('prompt'),false);assert.equal(first.searchParams.has('max_age'),false);
   assert.notEqual(first.searchParams.get('state'),second.searchParams.get('state'));

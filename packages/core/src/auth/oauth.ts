@@ -36,7 +36,7 @@ async function buildPkceParams(config: AuthConfig): Promise<URLSearchParams> {
 }
 
 /**
- * Append partner attribution and language parameters for sign-up.
+ * Append partner attribution + language params shared by login and sign-up.
  * `lang` mirrors deriv-api-v2's redirectToLogin/SignUp so Deriv's home app
  * opens in the same language the user selected in the template.
  */
@@ -53,13 +53,14 @@ function appendAttributionParams(params: URLSearchParams, config: AuthConfig): v
 
 /**
  * Build the OAuth 2.0 login authorization URL with PKCE parameters.
- * Keep sign-in independent of referral tracking. The OAuth state and callback
- * identify the Circletool connection; language remains optional.
+ * Includes optional partner attribution params (affiliate token, utm_*) when
+ * present in config — so attribution carries through if the user clicks Login
+ * then signs up from Deriv's home page — plus `lang` when provided.
  * Stores CSRF token and code verifier in sessionStorage.
  */
 export async function buildAuthorizationUrl(config: AuthConfig): Promise<string> {
   const params = await buildPkceParams(config);
-  if (config.lang) params.set('lang', config.lang.toUpperCase());
+  appendAttributionParams(params, config);
   return `${getAuthBaseUrl()}/auth?${params.toString()}`;
 }
 
@@ -156,9 +157,8 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams): Promis
     code_verifier: params.codeVerifier,
   });
 
-  const response = await fetch('/api/deriv-token', {
+  const response = await fetch(`${getAuthBaseUrl()}/token`, {
     method: 'POST',
-    signal: AbortSignal.timeout(15000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   });
@@ -197,9 +197,8 @@ export async function refreshAccessToken(
     client_id: clientId,
   });
 
-  const response = await fetch('/api/deriv-token', {
+  const response = await fetch(`${getAuthBaseUrl()}/token`, {
     method: 'POST',
-    signal: AbortSignal.timeout(15000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   });
