@@ -26,7 +26,7 @@ function cachedRequest<T>(connection: object, key: string, request: () => Promis
 }
 const inputClass = 'w-full rounded-lg border border-border bg-background p-3 text-foreground';
 
-export function AdvancedManualTrader({ type, initialSymbol, onBusy, onSymbolChange }: { type: AdvancedTradeType; initialSymbol?: string; onSymbolChange?: (symbol: string) => void; onBusy?: (busy: boolean) => void }) {
+export function AdvancedManualTrader({ type, initialSymbol, onBusy, onSymbolChange, compact = false }: { compact?: boolean; type: AdvancedTradeType; initialSymbol?: string; onSymbolChange?: (symbol: string) => void; onBusy?: (busy: boolean) => void }) {
   const { ws, isConnected, auth } = useDerivWSContext();
   const realSession = useRef({ ws, accountId: auth.activeAccountId, canTrade: auth.authState === 'authenticated' && !!auth.wsUrl && auth.activeAccount?.account_type === 'real' && isConnected });
   realSession.current = { ws, accountId: auth.activeAccountId, canTrade: auth.authState === 'authenticated' && !!auth.wsUrl && auth.activeAccount?.account_type === 'real' && isConnected };
@@ -152,9 +152,9 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy, onSymbolChan
   }
   const fields = (label: string, value: string, change: (value: string) => void, numeric = true) => <label className="flex flex-col gap-1 text-sm">{label}<input className={inputClass} disabled={busy || buying} value={value} type={numeric ? 'number' : 'text'} step={numeric ? 'any' : undefined} onChange={event => change(event.target.value)} /></label>;
 
-  return <div className="manual-contract-interface flex flex-col gap-4 py-4">
-    <div className="manual-contract-heading"><small>{definition.group}</small><h2>{definition.label}</h2><p>Choose your market, set the contract terms, then review a live quote.</p></div>
-    <label className="flex flex-col gap-1 text-sm">Market<select className={inputClass} value={symbol} disabled={busy || buying || !isConnected} onChange={event => { setSymbol(event.target.value); onSymbolChange?.(event.target.value); }}>{markets.map(market => <option value={market.underlying_symbol} key={market.underlying_symbol}>{market.underlying_symbol_name}</option>)}</select></label>
+  return <div className={`manual-contract-interface flex flex-col gap-4 py-4 ${compact ? 'manual-contract-compact' : ''}`}>
+    {!compact && <div className="manual-contract-heading"><small>{definition.group}</small><h2>{definition.label}</h2><p>Choose your market, set the contract terms, then review a live quote.</p></div>}
+    {!compact && <label className="flex flex-col gap-1 text-sm">Market<select className={inputClass} value={symbol} disabled={busy || buying || !isConnected} onChange={event => { setSymbol(event.target.value); onSymbolChange?.(event.target.value); }}>{markets.map(market => <option value={market.underlying_symbol} key={market.underlying_symbol}>{market.underlying_symbol_name}</option>)}</select></label>}
     <p className="text-xs text-muted-foreground">{!isConnected ? 'Connecting to Deriv…' : !catalog ? 'Checking available contracts…' : definition.contracts.some(available) ? 'Live quotes update automatically. Review the terms before buying.' : 'Unavailable on this market. Choose another market.'}</p>
     <fieldset disabled={busy || buying} className="manual-contract-settings grid grid-cols-2 gap-3">
       <legend>Contract settings</legend>
@@ -170,14 +170,14 @@ export function AdvancedManualTrader({ type, initialSymbol, onBusy, onSymbolChan
     </fieldset>
     {(definition.mode === 'barrier' || definition.mode === 'range') && <p className="text-xs text-muted-foreground">Use + or − for an offset from spot (for example +0.10), or an absolute price where supported.</p>}
     {type === 'turbos' && <p className="text-xs text-muted-foreground">Deriv calculates the knockout barrier from your payout per point. Review it in the quote before buying.</p>}
-    <button type="button" className="rounded-lg bg-primary p-3 font-semibold text-primary-foreground disabled:opacity-50" disabled={!isConnected || !catalog || !definition.contracts.some(available) || busy || buying} onClick={getQuotes}>{busy ? 'Requesting quotes…' : 'Get live quotes'}</button>
+    <button type="button" className="manual-refresh-quotes rounded-lg bg-primary p-3 font-semibold text-primary-foreground disabled:opacity-50" disabled={!isConnected || !catalog || !definition.contracts.some(available) || busy || buying} onClick={getQuotes}>{busy ? 'Requesting quotes…' : 'Get live quotes'}</button>
     <div className="manual-contract-quotes grid grid-cols-1 gap-3 sm:grid-cols-2" aria-label="Live contract quotes">
       {definition.contracts.map((contract, index) => {
         const quote = quoteSet?.key === key ? quoteSet.quotes[contract] : null;
         return <div className={`manual-contract-card ${index === 0 ? 'direction-up' : 'direction-down'} flex flex-col gap-2 rounded-lg border border-border p-3`} key={contract}>
-          <strong>{definition.directions[index]}</strong>
-          {quote ? <><p className="text-sm">Price: {Number(quote.ask_price).toFixed(2)} {currency}</p>{definition.mode !== 'multiplier' && definition.mode !== 'accumulator' && definition.mode !== 'turbo' && type !== 'vanillas' ? <p className="text-sm">Payout: {Number(quote.payout ?? 0).toFixed(2)} {currency}</p> : null}{quote.barrier && <p className="text-sm">Barrier: {quote.barrier}</p>}{quote.payout_per_point != null && <p className="text-sm">Per point: {quote.payout_per_point} {currency}</p>}<p className="text-xs text-muted-foreground">{quote.longcode}</p></> : <p className="text-xs text-muted-foreground">{!available(contract) ? 'Unavailable for this market' : quoteSet?.key === key ? quoteSet.errors[contract] : 'Request a quote to view price and contract terms.'}</p>}
-          <button type="button" className="mt-auto rounded-lg border border-border bg-secondary p-3 font-semibold disabled:opacity-50" disabled={!quote || !validQuotes || busy || buying || (auth.authState === 'authenticated' && !realSession.current.canTrade)} onClick={() => buy(contract)}>{buying ? 'Purchasing…' : auth.authState === 'authenticated' ? realSession.current.canTrade ? `Buy ${definition.directions[index]}` : 'Real account required' : 'Log in to buy'}</button>
+          {!compact && <strong>{definition.directions[index]}</strong>}
+          {quote ? <>{!compact && <p className="text-sm">Price: {Number(quote.ask_price).toFixed(2)} {currency}</p>}{definition.mode !== 'multiplier' && definition.mode !== 'accumulator' && definition.mode !== 'turbo' && type !== 'vanillas' ? <p className="manual-card-payout text-sm">Payout: {Number(quote.payout ?? 0).toFixed(2)} {currency}</p> : null}{quote.barrier && <p className="text-sm">Barrier: {quote.barrier}</p>}{quote.payout_per_point != null && <p className="text-sm">Per point: {quote.payout_per_point} {currency}</p>}{compact ? <details className="manual-quote-terms"><summary>Contract terms</summary><p className="text-xs text-muted-foreground">{quote.longcode}</p></details> : <p className="text-xs text-muted-foreground">{quote.longcode}</p>}</> : <p className="text-xs text-muted-foreground">{!available(contract) ? 'Unavailable for this market' : quoteSet?.key === key ? quoteSet.errors[contract] : 'Request a quote to view price and contract terms.'}</p>}
+          <button type="button" className="mt-auto rounded-lg border border-border bg-secondary p-3 font-semibold disabled:opacity-50" disabled={!quote || !validQuotes || busy || buying || (auth.authState === 'authenticated' && !realSession.current.canTrade)} onClick={() => buy(contract)}>{buying ? 'Purchasing…' : auth.authState === 'authenticated' ? realSession.current.canTrade ? compact ? definition.mode === 'accumulator' ? 'Buy' : definition.directions[index] : `Buy ${definition.directions[index]}` : 'Real account required' : 'Log in to buy'}</button>
         </div>;
       })}
     </div>

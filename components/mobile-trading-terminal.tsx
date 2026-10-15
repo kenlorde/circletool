@@ -3,9 +3,10 @@
 import { useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { Activity, BarChart3, BriefcaseBusiness, House, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
+import { ManualPriceChart } from './manual-price-chart';
 import { AdvancedManualTrader } from './advanced-manual-trader';
 import { ManualTradeTypePicker } from './manual-trade-type-picker';
-import { ADVANCED_TYPES, isAdvancedTrade, type AdvancedTradeType } from '@/lib/manual-trades';
+import { isAdvancedTrade, type AdvancedTradeType } from '@/lib/manual-trades';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
 import type { ActiveSymbol, Tick, ProposalInfo, DurationLimits } from '@deriv/core';
 import type { ContractDigitResult } from '@/lib/contract-digit-result';
@@ -104,7 +105,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
   } as CSSProperties;
 
   return (
-    <div className="mobile-terminal">
+    <div className={`mobile-terminal ${advancedType ? 'mobile-terminal-chart' : ''}`}>
       <nav className="mobile-terminal-nav" aria-label="Trading sections">
         <Link href="/dashboard"><House size={20} /> Dashboard</Link>
         <button type="button" className="active" onClick={() => tradeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}>
@@ -162,11 +163,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
         {!advancedType && result && <div className={`mobile-contract-tick ${resultClass}`} role="status">
           Tick {result.ticks} - <strong>{result.price.slice(0, -1)}<span>{result.digit}</span></strong>
         </div>}
-        {advancedType ? <div className="manual-spot-display">
-          <span>Live market price</span>
-          <strong>{currentTick ? Number(currentTick.quote).toFixed(pipSize) : '—'}</strong>
-          <small>{ADVANCED_TYPES.find(type => type.value === advancedType)?.label}</small>
-        </div> : <div className="mobile-digit-grid" aria-label="Last digit frequency">
+        {advancedType ? <ManualPriceChart tick={currentTick} symbol={activeSymbol?.underlying_symbol ?? ''} pipSize={pipSize} /> : <div className="mobile-digit-grid" aria-label="Last digit frequency">
           {cursorDigit !== null && <span className={`mobile-digit-cursor ${resultClass}`} style={cursorStyle} aria-label={`Cursor on digit ${cursorDigit}`} />}
           {digitStats.percentages.map((pct, digit) => {
             const selected = selectedDigit === digit;
@@ -200,7 +197,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
           if (isAdvancedTrade(value)) setAdvancedType(value);
           else { setAdvancedType(null); setTradeType(value); }
         }} />
-        {advancedType ? <AdvancedManualTrader key={advancedType} type={advancedType} onBusy={setAdvancedBusy} onSymbolChange={selectSymbol} initialSymbol={activeSymbol?.underlying_symbol} /> : <>
+        {advancedType ? <AdvancedManualTrader compact key={advancedType} type={advancedType} onBusy={setAdvancedBusy} onSymbolChange={selectSymbol} initialSymbol={activeSymbol?.underlying_symbol} /> : <>
         <button type="button" className="mobile-learn" onClick={() => setShowHelp(show => !show)} aria-expanded={showHelp}>Learn about this trade type</button>
         {showHelp && <p className="mobile-help">{tradeType === 'over-under' ? 'Over wins when the final digit is higher than your prediction; Under wins when it is lower. An equal digit loses.' : tradeType === 'even-odd' ? 'Even wins on 0, 2, 4, 6 or 8. Odd wins on 1, 3, 5, 7 or 9.' : 'Matches wins when the final digit equals your prediction. Differs wins when it does not.'}</p>}
         {tradeType !== 'even-odd' && (
