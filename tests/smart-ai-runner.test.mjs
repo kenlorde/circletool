@@ -115,3 +115,25 @@ test('demo or unknown account types are rejected before any request',async()=>{
   const f=fixture();await assert.rejects(runSmartAI({...f.input,accountType}),/real account/);assert.equal(f.calls.length,0);
  }
 });
+test('Smart Scanner alternates only after two consecutive losses on each side and keeps fixed stake', async () => {
+  const f = fixture([-1, 0.4, -1, -1, 0.4, -1, -1, 0.4]);
+  const send=f.input.ws.send; let settled=0;
+  f.input.ws.send=async p=>{const result=await send(p);if(p.proposal_open_contract && ++settled===8)f.controller.abort();return result;};
+  const progress=[];
+  await runSmartAI({...f.input,settings:{...settings,target:10,lossLimit:20,martingale:1,switchAfterTwoLosses:true},onProgress:p=>progress.push(p)});
+  assert.deepEqual(f.calls.filter(p=>p.proposal).map(p=>[p.contract_type,p.barrier]),[
+    ['DIGITUNDER','7'],['DIGITUNDER','7'],['DIGITUNDER','7'],['DIGITUNDER','7'],
+    ['DIGITOVER','2'],['DIGITOVER','2'],['DIGITOVER','2'],['DIGITUNDER','7']]);
+  assert.ok(f.calls.filter(p=>p.proposal).every(p=>p.amount===1));
+  assert.ok(f.transactions.every(t=>t.botId==='scanner'));
+  const closed=progress.filter(p=>p.message.startsWith('Contract settled'));
+  assert.deepEqual(closed.map(p=>p.consecutiveLosses),[1,0,1,0,0,1,0,0]);
+});
+test('Smart Scanner break-even breaks loss streak and loss limit prevents the next purchase',async()=>{
+  const f=fixture([-1,0,-1,-1]);let count=0;const send=f.input.ws.send;
+  f.input.ws.send=async p=>{const r=await send(p);if(p.proposal_open_contract&&++count===4)f.controller.abort();return r;};
+  await runSmartAI({...f.input,settings:{...settings,target:10,lossLimit:10,martingale:1,switchAfterTwoLosses:true}});
+  assert.ok(f.calls.filter(p=>p.proposal).every(p=>p.contract_type==='DIGITUNDER'));
+  const g=fixture([-1,-1]);const result=await runSmartAI({...g.input,settings:{...settings,target:10,lossLimit:2,martingale:1,switchAfterTwoLosses:true}});
+  assert.equal(result.trades,2);assert.equal(g.calls.filter(p=>p.buy).length,2);assert.equal(result.activeContract,'Over 2');
+});

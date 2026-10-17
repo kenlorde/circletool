@@ -4,6 +4,7 @@ export interface SmartAISettings {
   stake: number; ticks: number; target: number; lossLimit: number;
   martingale: number; useList: boolean; stakeList: number[];
   contractType?: SmartAIContractType; prediction?: number;
+  switchAfterTwoLosses?: boolean;
 }
 export const SMART_AI_CONTRACTS = [
   { type: 'CALL', label: 'Rise', group: 'rise-fall' },
@@ -27,7 +28,7 @@ export function smartAIContract(s: Pick<SmartAISettings, 'contractType' | 'predi
   }
   return { contractType, barrier, label: `${choice.label}${barrier === undefined ? '' : ` ${barrier}`}` };
 }
-export interface SmartAIProgress { message: string; trades: number; profit: number; wins: number; losses: number; nextStake: number }
+export interface SmartAIProgress { message: string; trades: number; profit: number; wins: number; losses: number; nextStake: number; activeContract?: string; consecutiveLosses?: number }
 interface Transport { send<T>(payload: Record<string, unknown>): Promise<T> }
 interface PendingStore { get(): string | null; set(value: string): void; clear(): void }
 type Contract = { contract_id?: number | string; is_sold?: number | boolean; profit?: number | string };
@@ -47,10 +48,11 @@ export async function runSmartAI(input: {
   const { settings: s, ws, signal, pending } = input;
   if (input.accountType !== 'real') throw Error('Bots require a real account. Demo accounts are not supported.');
   validateSmartAISettings(s);
-  const contract = smartAIContract(s);
+  let contract = smartAIContract(s.switchAfterTwoLosses ? { contractType: 'DIGITUNDER', prediction: 7 } : s);
+  let consecutiveLosses = 0;
   let trades = 0, profit = 0, wins = 0, losses = 0, stake = s.stake, listIndex = 0;
   const nextStake = () => s.useList ? s.stakeList[listIndex] : stake;
-  const report = (message: string) => { const result = { message, trades, profit, wins, losses, nextStake: nextStake() ?? 0 }; input.onProgress(result); return result; };
+  const report = (message: string) => { const result = { message, trades, profit, wins, losses, nextStake: nextStake() ?? 0, activeContract: contract.label, consecutiveLosses }; input.onProgress(result); return result; };
   const active = () => !signal.aborted && input.isCurrent();
   const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
   const request = <T,>(payload: Record<string, unknown>): Promise<T> => new Promise((resolve, reject) => {
@@ -98,7 +100,7 @@ export async function runSmartAI(input: {
     const id = Number(purchase.buy?.contract_id);
     if (!Number.isSafeInteger(id) || id <= 0) throw Error('Purchase confirmation missing. Check account transactions before restarting.');
     pending.set(String(id));
-    const transaction: BotTransaction = { accountId: input.accountId, botId: 'smart', contractType: contract.contractType, contractId: id, symbol: input.symbol, currency: input.currency, barrier: contract.barrier ?? '', ticks: s.ticks, stake: price, purchasedAt: Date.now(), status: 'open' };
+    const transaction: BotTransaction = { accountId: input.accountId, botId: s.switchAfterTwoLosses ? 'scanner' : 'smart', contractType: contract.contractType, contractId: id, symbol: input.symbol, currency: input.currency, barrier: contract.barrier ?? '', ticks: s.ticks, stake: price, purchasedAt: Date.now(), status: 'open' };
     input.onTransaction(transaction); report(`Contract ${id} open. Waiting for settlement…`);
     const deadline = Date.now() + (input.settlementTimeoutMs ?? 180000);
     let pnl: number | undefined;
@@ -116,7 +118,16 @@ export async function runSmartAI(input: {
     profit = Math.round((profit + pnl) * 100) / 100; trades++;
     if (pnl > 0) { wins++; stake = s.stake; listIndex = 0; }
     else { if (pnl < 0) losses++; stake = Math.round(stake * s.martingale * 100) / 100; listIndex++; }
-    report(`Contract settled: ${pnl.toFixed(2)} ${input.currency}.`);
+    if (s.switchAfterTwoLosses) {
+      consecutiveLosses = pnl < 0 ? consecutiveLosses + 1 : 0;
+      if (consecutiveLosses === 2) {
+        contract = smartAIContract(contract.contractType === 'DIGITUNDER'
+          ? { contractType: 'DIGITOVER', prediction: 2 }
+          : { contractType: 'DIGITUNDER', prediction: 7 });
+        consecutiveLosses = 0;
+      }
+    }
+    report(`Contract settled: ${pnl.toFixed(2)} ${input.currency}.${s.switchAfterTwoLosses ? ` Next: ${contract.label} · consecutive losses ${consecutiveLosses}/2.` : ''}`);
     await input.refreshBalance();
     if (!active()) return report('Stopped. No further purchases.');
     if (profit >= s.target) return report('Profit target reached. Stopped.');

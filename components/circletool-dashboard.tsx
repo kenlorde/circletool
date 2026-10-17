@@ -15,6 +15,7 @@ const actions = [
 const sections = [
   { href: '/dashboard', title: 'Dashboard', icon: House },
   { href: '/', title: 'Manual Trader', icon: Monitor },
+  { href: '/smart-scanner', title: 'Smart Scanner', icon: Bot },
   { href: '/smart-ai', title: 'Smart AI', icon: Bot },
   { href: '/copy-trading', title: 'Copy Trading', icon: BriefcaseBusiness },
   { href: '/tick-analysis', title: 'Tick Analysis', icon: Activity },
