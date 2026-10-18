@@ -47,7 +47,7 @@ test('recorded open purchase is reconciled when restarting after settlement',asy
  await b.start();assert.equal(b.transactions[0].status,'won');assert.equal(b.transactions[0].profit,.1);assert.equal(b.transactions[0].contractId,123);
 });
 
-test('after initial digit 8, later purchases continue without waiting for another entry', async () => {
+test('purchases begin on Start and continue after settlement without a digit trigger', async () => {
   let settlements = 0; const delays = [];
   const b = bot('7', {current:false}, async p => p.proposal_open_contract ? {proposal_open_contract:{is_sold:1,profit: ++settlements === 1 ? -.35 : .5}} : reply(p));
   let entries=0; b.context.waitForDigitEight=async()=>{entries++; return 100;};
@@ -55,19 +55,19 @@ test('after initial digit 8, later purchases continue without waiting for anothe
   await b.start();
   assert.equal(b.calls.filter(p=>p.buy).length,2);
   assert.deepEqual(delays,[1000,1000]);
-  assert.equal(entries,1);
+  assert.equal(entries,0);
 });
 
-test('no entry tick means no proposal or buy', async () => {
+test('Start purchases without receiving any entry tick', async () => {
  const b=bot('7',{current:false},async p=>reply(p));
  b.context.waitForDigitEight=async()=>null;
- await b.start();assert.equal(b.calls.filter(p=>p.proposal||p.buy).length,0);
+ await b.start();assert.equal(b.calls.filter(p=>p.proposal||p.buy).length,2);
 });
 
-test('original bot buys after digit 8 without applying payout screening', async () => {
+test('Expert buys immediately without applying payout screening', async () => {
  const b=bot('8',{current:false},async p=>p.proposal ? {proposal:{id:'original',ask_price:.35}} : reply(p));
  let entries=0;b.context.waitForDigitEight=async()=>{entries++;return 100;};
- await b.start();assert.equal(entries,1);assert.equal(b.calls.find(p=>p.buy).buy,'original');
+ await b.start();assert.equal(entries,0);assert.equal(b.calls.find(p=>p.buy).buy,'original');
 });
 
 test('Master and Expert reject demo accounts before any request',async()=>{
