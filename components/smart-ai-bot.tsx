@@ -5,7 +5,6 @@ import { useBaseTrading } from '@/hooks/use-base-trading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { readBotTransactions, type BotTransaction } from '@/lib/bot-transactions';
-import { waitForDigitEight } from '@/lib/bot-entry';
 import { getLastDigit } from '@/lib/digit-stats';
 const TYPES = ['DIGITUNDER'];
 type Reply = { proposal?: { id: string; ask_price: number | string }; buy?: { contract_id: number }; proposal_open_contract?: { is_sold: number; profit: number | string }; portfolio?: { contracts: unknown[] } };
@@ -51,10 +50,6 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
       if (!running.current || !mounted.current || !realAccount.current) return;
       setProfit(0); setTrades(0); setResults({ wins: 0, losses: 0, drawdown: 0 });
       const symbol = market.activeSymbol.underlying_symbol;
-      say('Waiting for the cursor to touch digit 8 before the first purchase…');
-      const entryEpoch = await waitForDigitEight(ws, symbol, market.pipSize, market.currentTick?.epoch ?? 0, () => running.current && mounted.current && realAccount.current);
-      if (!ws.isConnected) throw Error('Disconnected while waiting for digit 8. Stopped.');
-      if (entryEpoch === null || !running.current || !mounted.current) return;
       while (running.current && mounted.current && realAccount.current) {
         if (total >= goal) { say('Profit target reached. Stopped.'); break; }
         if (total <= -loss || amount > loss + total + 0.000001) { say('Loss limit reached, or remaining allowance is below the stake. Stopped.'); break; }
@@ -103,10 +98,10 @@ export function SmartAIBot({ barrier = '7', sessionLock, anotherBotRunning = fal
   }
   return <section className="space-y-5 rounded-2xl border p-4 sm:p-6" aria-label={botName}>
     <h2 className="text-2xl font-bold">{botName} · Under {barrier} bot</h2>
-    <p className="text-muted-foreground">Digit Under {barrier} wins on {barrier === '8' ? '0–7' : '0–6'} and loses on {barrier === '8' ? '8–9' : '7–9'}. Your chosen stake, one contract at a time. Entry trigger: digit 8. Start arms the bot; only the first purchase waits for a live digit 8. Later purchases continue after settlement. This bot does not predict digits.</p>
+    <p className="text-muted-foreground">Digit Under {barrier} wins on {barrier === '8' ? '0–7' : '0–6'} and loses on {barrier === '8' ? '8–9' : '7–9'}. Your chosen stake, one contract at a time. Press Start to begin purchasing immediately after account checks. Later purchases continue after settlement. This bot does not predict digits.</p>
     <div className="rounded-xl border p-4" aria-label="Live last digit">
-      <p className="mb-3 text-sm">First entry: cursor on 8 · Last digit: {market.currentTick ? getLastDigit(market.currentTick.quote, market.pipSize) : '—'}</p>
-      <div className="grid grid-cols-10 gap-1">{Array.from({ length: 10 }, (_, digit) => <span key={digit} className={'rounded-md border py-2 text-center font-bold ' + (market.currentTick && getLastDigit(market.currentTick.quote, market.pipSize) === digit ? 'bg-primary text-primary-foreground' : digit === 8 ? 'border-primary text-primary' : '')}>{digit}</span>)}</div>
+      <p className="mb-3 text-sm">Entry: on Start · Last digit: {market.currentTick ? getLastDigit(market.currentTick.quote, market.pipSize) : '—'}</p>
+      <div className="grid grid-cols-10 gap-1">{Array.from({ length: 10 }, (_, digit) => <span key={digit} className={'rounded-md border py-2 text-center font-bold ' + (market.currentTick && getLastDigit(market.currentTick.quote, market.pipSize) === digit ? 'bg-primary text-primary-foreground' : '')}>{digit}</span>)}</div>
     </div>
     <div className="rounded-xl border p-5 space-y-4">
       <label className="block">Volatility index<select className="mt-2 block w-full rounded-md border bg-background p-3" value={market.activeSymbol?.underlying_symbol ?? ''} disabled={busy} onChange={e => market.selectSymbol(e.target.value)}><option value="" disabled>Select a market</option>{market.symbols.filter(s => /volatility/i.test(s.underlying_symbol_name)).map(s => <option key={s.underlying_symbol} value={s.underlying_symbol}>{s.underlying_symbol_name}</option>)}</select></label>
