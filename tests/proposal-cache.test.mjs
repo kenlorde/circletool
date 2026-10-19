@@ -13,9 +13,9 @@ function fixture(){
  const params={contractType:'DIGITUNDER',symbol:'1HZ100V',amount:10,basis:'stake',currency:'USD',duration:1,durationUnit:'t',barrier:8};
  const render=(ws,overrides={})=>{cursor=0;return context.useProposal(ws,true,{...params,...overrides});};
  const flush=()=>{cleanup?.();cleanup=effect();};
- return {render,flush,dispose:()=>cleanup?.(),timers,runTimer(){const [id,timer]=timers.entries().next().value;timers.delete(id);timer.fn();return timer.delay;}};
+ return {render,flush,dispose:()=>cleanup?.(),timers,runTimer(){const [id,timer]=[...timers.entries()].sort((a,b)=>a[1].delay-b[1].delay)[0];timers.delete(id);timer.fn();return timer.delay;}};
 }
-function socket(){const handlers=[],requests=[];return {handlers,requests,subscribe(payload,handler){handlers.push(handler);requests.push(payload);return Promise.resolve({unsubscribe(){}});}};}
+function socket(){const handlers=[],requests=[];return {handlers,requests,send(payload){requests.push(payload);return new Promise(()=>{});},subscribe(payload,handler){handlers.push(handler);requests.push(payload);return Promise.resolve({unsubscribe(){}});}};}
 const response={proposal:{id:'quote',ask_price:'10.00',payout:'11.76',longcode:'Under',validation_params:{stake:{min:'0.35'},payout:{max:'10000'}}}};
 test('displayed proposal records receipt time and normalizes numeric API strings',()=>{
  const f=fixture(),ws=socket();f.render(ws);f.flush();const before=Date.now();ws.handlers[0](response);const proposal=f.render(ws).proposal;
@@ -39,21 +39,36 @@ test('a rejected quote retries automatically and recovers without sending a buy'
  const f=fixture(),ws=socket();let fail=true;
  const subscribe=ws.subscribe;ws.subscribe=(...args)=>fail?Promise.reject(new Error('Temporary failure')):subscribe(...args);
  f.render(ws);f.flush();await Promise.resolve();await Promise.resolve();
- assert.equal(f.render(ws).proposal,null);assert.equal(f.runTimer(),250);
+ assert.equal(f.render(ws).proposal,null);assert.equal(f.runTimer(),100);
  fail=false;f.render(ws);f.flush();ws.handlers[0](response);
  assert.equal(f.render(ws).proposal.id,'quote');assert.equal(f.timers.size,0);
  assert.ok(ws.requests.every(request=>request.proposal===1&&!request.buy));
 });
 test('silent requests recover and late replies from cancelled attempts are ignored',()=>{
  const f=fixture(),ws=socket();f.render(ws);f.flush();
- assert.equal(f.runTimer(),3000);assert.equal(f.runTimer(),250);
+ assert.equal(f.runTimer(),350);assert.equal(f.runTimer(),3000);assert.equal(f.runTimer(),100);
  f.render(ws);f.flush();ws.handlers[0](response);assert.equal(f.render(ws).proposal,null);
  ws.handlers[1](response);assert.equal(f.render(ws).proposal.id,'quote');
 });
 test('repeated failures back off and cleanup cancels retries',async()=>{
  const f=fixture(),ws={subscribe:()=>Promise.reject(new Error('Unavailable'))};
- for(const delay of [250,500,1000,2000,4000,8000,8000]){
+ for(const delay of [100,200,400,800,1600,3200,3200]){
   f.render(ws);f.flush();await Promise.resolve();await Promise.resolve();assert.equal(f.runTimer(),delay);
  }
  f.render(ws);f.flush();await Promise.resolve();await Promise.resolve();f.dispose();assert.equal(f.timers.size,0);
+});
+
+test('350 ms backup recovers a silent quote without cancelling the original or buying',async()=>{
+ const f=fixture(),ws=socket();let answer;
+ ws.send=payload=>{ws.requests.push(payload);return new Promise(resolve=>{answer=resolve;});};
+ f.render(ws);f.flush();assert.equal(f.runTimer(),350);
+ assert.equal(ws.requests.length,2);assert.ok(ws.requests.every(p=>p.proposal===1&&!p.buy));
+ answer(response);await Promise.resolve();assert.equal(f.render(ws).proposal.id,'quote');
+ assert.equal(f.timers.size,0);
+ ws.handlers[0]({proposal:{...response.proposal,id:'stream'}});
+ assert.equal(f.render(ws).proposal.id,'stream');
+});
+test('fast quote fallback is cancelled as soon as the original answers',()=>{
+ const f=fixture(),ws=socket();f.render(ws);f.flush();ws.handlers[0](response);
+ assert.equal(f.timers.size,0);assert.equal(ws.requests.length,1);
 });
