@@ -96,10 +96,10 @@ export function useProposal(
       }
     };
     // Keep the original request alive: a slow network reply must not be
-    // discarded by a short timeout. One quote-only fallback starts at 350 ms.
+    // discarded by a short timeout. One quote-only fallback starts at 100 ms.
     fastTimer = setTimeout(() => {
       if (!cancelled) void ws.send<ProposalResponse>(payload).then(receiveQuote).catch(() => {});
-    }, 350);
+    }, 100);
     ws.subscribe(payload, receiveQuote).then((sub) => {
       if (cancelled) {
         sub.unsubscribe();
