@@ -46,7 +46,7 @@ test('a rejected quote retries automatically and recovers without sending a buy'
 });
 test('silent requests recover and late replies from cancelled attempts are ignored',()=>{
  const f=fixture(),ws=socket();f.render(ws);f.flush();
- assert.equal(f.runTimer(),350);assert.equal(f.runTimer(),3000);assert.equal(f.runTimer(),100);
+ assert.equal(f.runTimer(),100);assert.equal(f.runTimer(),3000);assert.equal(f.runTimer(),100);
  f.render(ws);f.flush();ws.handlers[0](response);assert.equal(f.render(ws).proposal,null);
  ws.handlers[1](response);assert.equal(f.render(ws).proposal.id,'quote');
 });
@@ -58,10 +58,10 @@ test('repeated failures back off and cleanup cancels retries',async()=>{
  f.render(ws);f.flush();await Promise.resolve();await Promise.resolve();f.dispose();assert.equal(f.timers.size,0);
 });
 
-test('350 ms backup recovers a silent quote without cancelling the original or buying',async()=>{
+test('100 ms backup recovers a silent quote without cancelling the original or buying',async()=>{
  const f=fixture(),ws=socket();let answer;
  ws.send=payload=>{ws.requests.push(payload);return new Promise(resolve=>{answer=resolve;});};
- f.render(ws);f.flush();assert.equal(f.runTimer(),350);
+ f.render(ws);f.flush();assert.equal(f.runTimer(),100);
  assert.equal(ws.requests.length,2);assert.ok(ws.requests.every(p=>p.proposal===1&&!p.buy));
  answer(response);await Promise.resolve();assert.equal(f.render(ws).proposal.id,'quote');
  assert.equal(f.timers.size,0);
