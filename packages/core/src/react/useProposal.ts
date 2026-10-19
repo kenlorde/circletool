@@ -40,12 +40,14 @@ export function useProposal(
       retryIdentity.current = { ws, key };
     }
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let fastTimer: ReturnType<typeof setTimeout> | undefined;
     let quoteTimer: ReturnType<typeof setTimeout> | undefined;
     const retry = () => {
       if (cancelled || retryTimer !== undefined) return;
       clearTimeout(quoteTimer);
+      clearTimeout(fastTimer);
       setQuote(null);
-      const delay = Math.min(250 * 2 ** Math.min(retryAttempt.current++, 5), 8000);
+      const delay = Math.min(100 * 2 ** Math.min(retryAttempt.current++, 5), 8000);
       retryTimer = setTimeout(() => {
         if (!cancelled) refresh();
       }, delay);
@@ -73,11 +75,12 @@ export function useProposal(
       payload.barrier = params.barrier;
     }
 
-    ws.subscribe(payload, (data) => {
+    const receiveQuote = (data: unknown) => {
       if (cancelled) return;
       const resp = data as unknown as ProposalResponse;
       if (resp.proposal) {
         clearTimeout(quoteTimer);
+        clearTimeout(fastTimer);
         clearTimeout(retryTimer);
         retryTimer = undefined;
         retryAttempt.current = 0;
@@ -91,7 +94,13 @@ export function useProposal(
           maxPayout: parseFloat(resp.proposal.validation_params?.payout?.max ?? '0'),
         } });
       }
-    }).then((sub) => {
+    };
+    // Keep the original request alive: a slow network reply must not be
+    // discarded by a short timeout. One quote-only fallback starts at 350 ms.
+    fastTimer = setTimeout(() => {
+      if (!cancelled) void ws.send<ProposalResponse>(payload).then(receiveQuote).catch(() => {});
+    }, 350);
+    ws.subscribe(payload, receiveQuote).then((sub) => {
       if (cancelled) {
         sub.unsubscribe();
       } else {
@@ -105,6 +114,7 @@ export function useProposal(
       cancelled = true;
       clearTimeout(quoteTimer);
       clearTimeout(retryTimer);
+      clearTimeout(fastTimer);
       setQuote(null);
       if (unsubRef.current) {
         unsubRef.current();
