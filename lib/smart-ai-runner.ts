@@ -67,15 +67,27 @@ export async function runSmartAI(input: {
   };
   const previous = pending.get();
   if (previous) {
-    if (previous === 'unknown') throw Error('A previous purchase was not confirmed. Check account transactions before restarting; no purchase will be retried.');
+    if (previous === 'unknown') throw Error('A previous buy has no confirmed contract ID. Verify the transaction in Deriv history before restarting. Smart AI remains stopped to prevent a duplicate purchase.');
     const id = Number(previous);
     if (!Number.isSafeInteger(id) || id <= 0) throw Error('Invalid pending contract. Check account transactions.');
-    const response = await request<{ proposal_open_contract?: Contract }>({ proposal_open_contract: 1, contract_id: id });
-    const recovered = closed(response.proposal_open_contract, id);
+    // A confirmed contract ID can be queried again safely; this never repeats a buy.
+    let response: { proposal_open_contract?: Contract } | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        response = await request<{ proposal_open_contract?: Contract }>({ proposal_open_contract: 1, contract_id: id });
+        break;
+      } catch (error) {
+        if (!active()) throw error;
+        if (attempt === 2) throw Error('Could not verify previous contract with Deriv. Bot stopped; no new purchase sent.');
+        await delay(500 * (attempt + 1));
+      }
+    }
+    const recovered = closed(response?.proposal_open_contract, id);
     if (recovered === undefined) throw Error('A previous bot contract is still open. Wait for settlement before restarting.');
     const transaction = input.findTransaction(id);
     if (transaction) input.onTransaction({ ...transaction, profit: recovered, settledAt: Date.now(), status: recovered > 0 ? 'won' : recovered < 0 ? 'lost' : 'break-even' });
-    pending.clear(); await input.refreshBalance();
+    pending.clear();
+    try { await input.refreshBalance(); } catch { report('Previous contract reconciled; balance refresh failed. Checking live balance before any new purchase.'); }
   }
   if (!active()) return report('Stopped before purchase.');
   const portfolio = await request<{ portfolio?: { contracts: unknown[] } }>({ portfolio: 1 });
@@ -106,6 +118,7 @@ export async function runSmartAI(input: {
     const latestBalance = Number(latestReply.balance?.balance);
     if (!Number.isFinite(latestBalance) || latestBalance < 0 || (latestReply.balance?.currency && latestReply.balance.currency !== input.currency) || (latestReply.balance?.loginid && latestReply.balance.loginid !== input.accountId))
       return report('Account balance could not be verified. Bot stopped.');
+    if (!active()) return report('Stopped before purchase.');
     if (price > latestBalance + 0.000001)
       return report(`Next stake ${price.toFixed(2)} ${input.currency} exceeds available balance ${latestBalance.toFixed(2)} ${input.currency}. Bot stopped.`);
     // Persist before sending buy: a missing confirmation must never be retried.
@@ -156,7 +169,7 @@ export async function runSmartAI(input: {
       }
     }
     report(`Contract settled: ${pnl.toFixed(2)} ${input.currency}.${s.switchAfterTwoLosses ? ` Next: ${contract.label} · consecutive losses ${consecutiveLosses}/2.` : ''}`);
-    await input.refreshBalance();
+    try { await input.refreshBalance(); } catch { report('Balance refresh failed; next trade requires a fresh verified balance.'); }
     if (!active()) return report('Stopped. No further purchases.');
     if (profit >= s.target) return report('Profit target reached. Stopped.');
     await delay(input.paceMs ?? 1000);
