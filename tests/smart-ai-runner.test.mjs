@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 const source = await readFile(new URL('../lib/smart-ai-runner.ts', import.meta.url), 'utf8');
-const { runSmartAI } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const { runSmartAI, captureSmartAIConfirmation, smartAIHasUnknownPurchase } = await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
 const settings = { stake: 1, ticks: 1, target: 0.5, lossLimit: 10, martingale: 2, useList: false, stakeList: [0.35, 0.43, 0.85] };
 function fixture(profits = [0.5]) {
   const calls = [], transactions = [], controller = new AbortController();
   let pending = null, buys = 0, amount = 0;
   const ws = { async send(payload) {
     calls.push(payload);
+    if (payload.balance) return { balance: { balance: 100, currency: 'USD', loginid: 'REAL1' } };
+    if (payload.profit_table) return { profit_table: { transactions: [] } };
     if (payload.portfolio) return { portfolio: { contracts: [] } };
     if (payload.proposal) { amount = payload.amount; return { proposal: { id: `q-${buys + 1}`, ask_price: amount } }; }
     if (payload.buy) { buys++; return { buy: { contract_id: buys } }; }
@@ -25,7 +27,7 @@ function fixture(profits = [0.5]) {
 test('Rise buys use fresh proposals, settle in sequence, and stop at profit target', async () => {
   const f = fixture([0.25, 0.25]); const result = await runSmartAI(f.input);
   assert.equal(result.trades, 2); assert.equal(result.profit, 0.5); assert.equal(f.pending(), null);
-  assert.deepEqual(f.calls.map(p => p.portfolio ? 'portfolio' : p.proposal ? 'quote' : p.buy ? 'buy' : 'settle'), ['portfolio', 'quote', 'buy', 'settle', 'quote', 'buy', 'settle']);
+  assert.deepEqual(f.calls.filter(p => !p.balance).map(p => p.portfolio ? 'portfolio' : p.proposal ? 'quote' : p.buy ? 'buy' : 'settle'), ['portfolio', 'quote', 'buy', 'settle', 'quote', 'buy', 'settle']);
   for (const p of f.calls.filter(p => p.proposal)) { assert.equal(p.contract_type, 'CALL'); assert.equal(p.underlying_symbol, 'R_10'); assert.equal(p.duration_unit, 't'); assert.equal(p.barrier, undefined); }
   assert.deepEqual(f.transactions.map(t => t.status), ['open', 'won', 'open', 'won']);
 });
@@ -89,7 +91,7 @@ test('unconfirmed buy is persisted and never automatically retried', async () =>
   const f = fixture(), send = f.input.ws.send;
   f.input.ws.send = p => p.buy ? (f.calls.push(p), new Promise(() => {})) : send(p);
   await assert.rejects(runSmartAI(f.input), /timed out/); assert.equal(f.pending(), 'unknown');
-  await assert.rejects(runSmartAI(f.input), /not confirmed/); assert.equal(f.calls.filter(p => p.buy).length, 1);
+  await assert.rejects(runSmartAI(f.input), /no confirmed contract ID/); assert.equal(f.calls.filter(p => p.buy).length, 1);
 });
 test('malformed quote, existing positions, and bad settings send no purchases', async () => {
   const f = fixture(), send = f.input.ws.send;
@@ -136,4 +138,69 @@ test('Smart Scanner break-even breaks loss streak and loss limit prevents the ne
   assert.ok(f.calls.filter(p=>p.proposal).every(p=>p.contract_type==='DIGITUNDER'));
   const g=fixture([-1,-1]);const result=await runSmartAI({...g.input,settings:{...settings,target:10,lossLimit:2,martingale:1,switchAfterTwoLosses:true}});
   assert.equal(result.trades,2);assert.equal(g.calls.filter(p=>p.buy).length,2);assert.equal(result.activeContract,'Over 2');
+});
+
+
+test('Smart AI records a delayed successful buy after the runner times out, then reconciles without a duplicate', async () => {
+  const f = fixture(), send = f.input.ws.send;
+  let confirm;
+  f.input.ws.send = p => p.buy ? (f.calls.push(p), new Promise(resolve => { confirm = resolve; })) : send(p);
+  const input = { ...f.input, recoverPurchases: true };
+  await assert.rejects(runSmartAI(input), /timed out/);
+  assert.ok(smartAIHasUnknownPurchase(f.pending()));
+  confirm({ buy: { contract_id: 123 } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.pending(), '123');
+  assert.equal(f.transactions.at(-1).contractId, 123);
+  f.controller.abort();
+  await runSmartAI(input);
+  assert.equal(f.pending(), null);
+  assert.equal(f.transactions.at(-1).status, 'won');
+  assert.equal(f.calls.filter(p => p.buy).length, 1);
+});
+
+test('late raw WebSocket confirmations require the exact persisted attempt token', async () => {
+  const f = fixture(), send = f.input.ws.send;
+  f.input.ws.send = p => p.buy ? (f.calls.push(p), new Promise(() => {})) : send(p);
+  await assert.rejects(runSmartAI({ ...f.input, recoverPurchases: true }), /timed out/);
+  const payload = f.calls.find(p => p.buy);
+  const old = f.pending();
+  assert.equal(captureSmartAIConfirmation({buy:{contract_id:321}, echo_req:{passthrough:{smart_ai_attempt:'different'}}}, f.input.pending, f.input.onTransaction), false);
+  assert.equal(f.pending(), old);
+  assert.equal(captureSmartAIConfirmation({buy:{contract_id:321}, echo_req:payload}, f.input.pending, f.input.onTransaction), true);
+  assert.equal(f.pending(), '321');
+  assert.equal(f.transactions.at(-1).contractId, 321);
+});
+
+test('legacy unknown purchases query Deriv history but never guess a contract or resend buy', async () => {
+  const f = fixture(); f.input.pending.set('unknown');
+  await assert.rejects(runSmartAI({...f.input,recoverPurchases:true}), /history checked/);
+  assert.ok(f.calls.some(p => p.portfolio)); assert.ok(f.calls.some(p => p.profit_table));
+  assert.equal(f.pending(), 'unknown'); assert.equal(f.calls.filter(p=>p.buy).length, 0);
+});
+
+test('a failed history check keeps the unknown purchase locked', async () => {
+  const f=fixture();f.input.pending.set('unknown');
+  f.input.ws.send=async()=>{throw Error('Connection lost')};
+  await assert.rejects(runSmartAI({...f.input,recoverPurchases:true}), /Connection lost/);
+  assert.equal(f.pending(),'unknown');
+});
+
+test('an excessive stake still stops Smart AI before requesting a quote or buy', async () => {
+  const f=fixture();const send=f.input.ws.send;
+  f.input.ws.send=p=>p.balance?Promise.resolve({balance:{balance:8.53,currency:'USD',loginid:'REAL1'}}):send(p);
+  const result=await runSmartAI({...f.input,recoverPurchases:true,settings:{...settings,stake:10}});
+  assert.match(result.message,/exceeds available balance/);
+  assert.equal(f.calls.filter(p=>p.proposal||p.buy).length,0);
+});
+
+test('late definitive rejections unlock only their own attempt', async () => {
+  const f=fixture(),send=f.input.ws.send;
+  f.input.ws.send=p=>p.buy?(f.calls.push(p),new Promise(()=>{})):send(p);
+  await assert.rejects(runSmartAI({...f.input,recoverPurchases:true}),/timed out/);
+  const payload=f.calls.find(p=>p.buy);
+  captureSmartAIConfirmation({echo_req:payload,error:{code:'UnknownError'}},f.input.pending,f.input.onTransaction);
+  assert.ok(smartAIHasUnknownPurchase(f.pending()));
+  captureSmartAIConfirmation({echo_req:payload,error:{code:'InsufficientBalance'}},f.input.pending,f.input.onTransaction);
+  assert.equal(f.pending(),null);
 });

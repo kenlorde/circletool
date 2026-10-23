@@ -30,8 +30,46 @@ export function smartAIContract(s: Pick<SmartAISettings, 'contractType' | 'predi
 }
 export interface SmartAIProgress { message: string; trades: number; profit: number; wins: number; losses: number; nextStake: number; activeContract?: string; consecutiveLosses?: number }
 interface Transport { send<T>(payload: Record<string, unknown>): Promise<T> }
-interface PendingStore { get(): string | null; set(value: string): void; clear(): void }
+export interface PendingStore { get(): string | null; set(value: string): void; clear(): void }
 type Contract = { contract_id?: number | string; is_sold?: number | boolean; profit?: number | string };
+// Smart AI only: preserve an attempt identifier across a timeout/reload.
+// Never associate a different account's or bot's late response with this attempt.
+interface PurchaseAttempt { token: string; transaction: Omit<BotTransaction, 'contractId'> }
+export function readSmartAIAttempt(value: string | null): PurchaseAttempt | undefined {
+  try {
+    const parsed = JSON.parse(value ?? 'null');
+    if (typeof parsed?.token === 'string' && parsed.token && parsed.transaction?.botId === 'smart') return parsed;
+  } catch { /* Old versions stored the literal "unknown". */ }
+  return undefined;
+}
+const definitiveRejections = ['InsufficientBalance', 'InvalidContractProposal', 'PriceMoved', 'ContractCreationFailure', 'InvalidOfferings'];
+export function captureSmartAIConfirmation(message: Record<string, unknown>, pending: PendingStore, onTransaction: (t: BotTransaction) => void) {
+  const attempt = readSmartAIAttempt(pending.get());
+  const echo = message.echo_req as { passthrough?: { smart_ai_attempt?: string } } | undefined;
+  if (!attempt || echo?.passthrough?.smart_ai_attempt !== attempt.token) return false;
+  const rejection = message.error as { code?: string } | undefined;
+  if (rejection) {
+    if (rejection.code && definitiveRejections.includes(rejection.code)) pending.clear();
+    return false;
+  }
+  const id = Number((message.buy as { contract_id?: unknown } | undefined)?.contract_id);
+  if (!Number.isSafeInteger(id) || id <= 0) return false;
+  pending.set(String(id));
+  onTransaction({ ...attempt.transaction, contractId: id });
+  return true;
+}
+export function smartAIHasUnknownPurchase(value: string | null) {
+  return value === 'unknown' || !!readSmartAIAttempt(value);
+}
+export async function checkSmartAIHistory(ws: Transport) {
+  const [open, closed] = await Promise.all([
+    ws.send<{ portfolio?: { contracts?: { contract_id: number }[] } }>({ portfolio: 1 }),
+    ws.send<{ profit_table?: { transactions?: { contract_id: number }[] } }>({ profit_table: 1, sort: 'DESC', limit: 20 }),
+  ]);
+  if (!Array.isArray(open.portfolio?.contracts) || !Array.isArray(closed.profit_table?.transactions)) throw Error('Deriv history could not be verified. Purchase remains locked.');
+  const ids = [...open.portfolio.contracts, ...closed.profit_table.transactions].map(c => Number(c.contract_id)).filter(id => Number.isSafeInteger(id) && id > 0);
+  return { openCount: open.portfolio.contracts.length, ids: [...new Set(ids)] };
+}
 export function validateSmartAISettings(s: SmartAISettings) {
   if (![s.stake, s.ticks, s.target, s.lossLimit, s.martingale].every(n => Number.isFinite(n) && n > 0) || !Number.isInteger(s.ticks)) throw Error('Enter positive settings and a whole number of ticks.');
   if (s.useList && (!s.stakeList.length || !s.stakeList.every(n => Number.isFinite(n) && n > 0))) throw Error('Enter a comma-separated list of positive stakes.');
@@ -43,7 +81,7 @@ export async function runSmartAI(input: {
   findTransaction: (id: number) => BotTransaction | undefined;
   onTransaction: (transaction: BotTransaction) => void;
   onProgress: (progress: SmartAIProgress) => void; refreshBalance: () => Promise<unknown>;
-  requestTimeoutMs?: number; pollMs?: number; paceMs?: number; settlementTimeoutMs?: number;
+  recoverPurchases?: boolean; requestTimeoutMs?: number; pollMs?: number; paceMs?: number; settlementTimeoutMs?: number;
 }) {
   const { settings: s, ws, signal, pending } = input;
   if (input.accountType !== 'real') throw Error('Bots require a real account. Demo accounts are not supported.');
@@ -55,9 +93,9 @@ export async function runSmartAI(input: {
   const report = (message: string) => { const result = { message, trades, profit, wins, losses, nextStake: nextStake() ?? 0, activeContract: contract.label, consecutiveLosses }; input.onProgress(result); return result; };
   const active = () => !signal.aborted && input.isCurrent();
   const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-  const request = <T,>(payload: Record<string, unknown>): Promise<T> => new Promise((resolve, reject) => {
+  const request = <T,>(payload: Record<string, unknown>, transport: Transport = ws): Promise<T> => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Deriv request timed out. Check account transactions before restarting.')), input.requestTimeoutMs ?? 15000);
-    ws.send<T>(payload).then(result => { clearTimeout(timer); resolve(result); }, error => { clearTimeout(timer); reject(error); });
+    transport.send<T>(payload).then(result => { clearTimeout(timer); resolve(result); }, error => { clearTimeout(timer); reject(error); });
   });
   const closed = (contract: Contract | undefined, id: number) => {
     if (Number(contract?.contract_id) !== id) throw Error('Invalid settlement response. Check account transactions.');
@@ -65,9 +103,17 @@ export async function runSmartAI(input: {
     if (contract.profit === undefined || contract.profit === null || contract.profit === '' || !Number.isFinite(Number(contract.profit))) throw Error('Settlement profit unavailable. Check account transactions.');
     return Number(contract.profit);
   };
-  const previous = pending.get();
+  let previous = pending.get();
   if (previous) {
-    if (previous === 'unknown') throw Error('A previous buy has no confirmed contract ID. Verify the transaction in Deriv history before restarting. Smart AI remains stopped to prevent a duplicate purchase.');
+    if (smartAIHasUnknownPurchase(previous)) {
+      if (!input.recoverPurchases) throw Error('A previous buy has no confirmed contract ID. Verify the transaction in Deriv history before restarting. Smart AI remains stopped to prevent a duplicate purchase.');
+      report('Checking previous purchase against Deriv history…');
+      const history = await checkSmartAIHistory({ send: request });
+      // A late confirmation may have resolved the attempt while history loaded.
+      previous = pending.get();
+      if (smartAIHasUnknownPurchase(previous)) throw Error(`Purchase needs verification. Deriv history checked: ${history.openCount} open position(s). Use Recover previous purchase below to verify the contract or confirm no purchase occurred.`);
+      if (!previous) return report('Deriv confirmed the purchase was rejected. Press Start to begin again.');
+    }
     const id = Number(previous);
     if (!Number.isSafeInteger(id) || id <= 0) throw Error('Invalid pending contract. Check account transactions.');
     // A confirmed contract ID can be queried again safely; this never repeats a buy.
@@ -124,15 +170,23 @@ export async function runSmartAI(input: {
     // Persist before sending buy: a missing confirmation must never be retried.
     report(`Purchasing ${contract.label}…`);
     if (!active()) return report('Stopped before purchase.');
-    pending.set('unknown');
+    const transactionBase: Omit<BotTransaction, 'contractId'> = { accountId: input.accountId, botId: 'smart', contractType: contract.contractType, symbol: input.symbol, currency: input.currency, barrier: contract.barrier ?? '', ticks: s.ticks, stake: price, purchasedAt: Date.now(), status: 'open' };
+    const attempt = input.recoverPurchases ? { token: crypto.randomUUID(), transaction: transactionBase } : undefined;
+    pending.set(attempt ? JSON.stringify(attempt) : 'unknown');
+    const purchaseTransport = { send: <T,>(payload: Record<string, unknown>): Promise<T> => ws.send<T>(payload).then(result => {
+      if (attempt) captureSmartAIConfirmation({ ...result as Record<string, unknown>, echo_req: payload }, pending, input.onTransaction);
+      return result;
+    }) };
     let purchase: { buy?: { contract_id?: number | string } };
     try {
-      purchase = await request<{ buy?: { contract_id?: number | string } }>({ buy: quote.proposal.id, price: String(price) });
+      const payload = { buy: quote.proposal.id, price: String(price), ...(attempt ? { passthrough: { smart_ai_attempt: attempt.token } } : {}) };
+      // Capture the underlying promise even when the runner's timeout has fired.
+      purchase = await request<{ buy?: { contract_id?: number | string } }>(payload, purchaseTransport);
     } catch (error) {
       // Only a definitive broker rejection can safely unlock this attempt.
       // Timeouts, disconnects, and missing confirmations remain locked.
       const code = (error as { code?: string })?.code;
-      if (typeof code === 'string' && ['InsufficientBalance', 'InvalidContractProposal', 'PriceMoved', 'ContractCreationFailure', 'InvalidOfferings'].includes(code)) {
+      if (typeof code === 'string' && definitiveRejections.includes(code)) {
         pending.clear();
         return report(`Purchase rejected by Deriv (${code}). Bot stopped.`);
       }
