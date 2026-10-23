@@ -52,3 +52,25 @@ test('expired PKCE fallback cannot complete a new-tab callback',()=>{
   vm.createContext(context);vm.runInContext(storageCode+';globalThis.api={getCSRFToken,getCodeVerifier};',context);
   assert.equal(context.api.getCSRFToken(),null);assert.equal(context.api.getCodeVerifier(),null);assert.equal(shared.size,0);
 });
+
+
+test('post-logout login requests fresh credentials without changing signup or callback',async()=>{
+  const context={URLSearchParams,generateRandomBase64url:()=> 'random',sha256Base64url:async()=> 'hash',
+    storeCSRFToken(){},storeCodeVerifier(){},getAuthBaseUrl:()=> 'https://auth.deriv.com/oauth2'};
+  vm.createContext(context);vm.runInContext(code+';globalThis.login=buildAuthorizationUrl;globalThis.signup=buildSignUpUrl;',context);
+  const config={clientId:'app',redirectUri:'https://circletool.pro',forceLogin:true};
+  const login=new URL(await context.login(config)),signup=new URL(await context.signup(config));
+  assert.equal(login.searchParams.get('prompt'),'login');
+  assert.equal(login.searchParams.get('max_age'),'0');
+  assert.equal(login.searchParams.get('redirect_uri'),config.redirectUri);
+  assert.equal(signup.searchParams.get('prompt'),'registration');
+  assert.equal(signup.searchParams.has('max_age'),false);
+});
+test('the logout marker survives reloads and makes each retry request a fresh login',()=>{
+  const values=new Map([['circletool_require_login','true']]);
+  const context={process:{env:{NEXT_PUBLIC_DERIV_APP_ID:'app'}},window:{location:{origin:'https://circletool.pro'}},
+    localStorage:storage(values),readStoredLanguage:()=>null,parseLandingParams:()=>null};
+  vm.createContext(context);vm.runInContext(configCode+';globalThis.config=getAuthConfig;',context);
+  assert.equal(context.config().forceLogin,true);assert.equal(context.config().forceLogin,true);
+  values.delete('circletool_require_login');assert.equal(context.config().forceLogin,false);
+});

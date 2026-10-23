@@ -34,6 +34,7 @@ function getAuthConfig(lang?: string): AuthConfig {
   const config: AuthConfig = {
     clientId: process.env.NEXT_PUBLIC_DERIV_APP_ID ?? '',
     redirectUri,
+    forceLogin: typeof window !== 'undefined' && localStorage.getItem('circletool_require_login') === 'true',
   };
 
   // Prefer the live UI language; fall back to the namespaced storage key so
@@ -175,7 +176,7 @@ export function useAuth(): UseAuthReturn {
   const completeAuth = useCallback(
     async (authInfo: AuthInfo, preferredAccountId?: string | null) => {
       const version = sessionVersion.current;
-      const fetchedAccounts = await fetchAccounts(authInfo, getAuthConfig().clientId);
+      const fetchedAccounts = await fetchAccounts(authInfo, getAuthConfig().clientId, () => version === sessionVersion.current);
       if (version !== sessionVersion.current) return;
       if (!fetchedAccounts.length) throw new Error("No trading accounts are available. Please log in again.");
       setAccounts(fetchedAccounts);
@@ -194,6 +195,7 @@ export function useAuth(): UseAuthReturn {
         setWsUrl(otpUrl);
       }
 
+      localStorage.removeItem('circletool_require_login');
       setAuthState('authenticated');
     },
     [fetchOTPUrl]
@@ -242,7 +244,7 @@ export function useAuth(): UseAuthReturn {
       if (code || url.searchParams.has('error')) {
         setAuthState('authenticating');
         try {
-          const authInfo = await handleOAuthCallback(window.location.href, getAuthConfig());
+          const authInfo = await handleOAuthCallback(window.location.href, getAuthConfig(), () => version === sessionVersion.current);
           if (version !== sessionVersion.current) return;
           await completeAuth(authInfo);
         } catch (err) {
@@ -266,7 +268,8 @@ export function useAuth(): UseAuthReturn {
           try {
             refreshed = await refreshAccessToken(
               storedAuth.refresh_token,
-              getAuthConfig().clientId
+              getAuthConfig().clientId,
+              () => version === sessionVersion.current
             );
           } catch {
             if (version !== sessionVersion.current) return;
@@ -407,14 +410,44 @@ export function useAuth(): UseAuthReturn {
     };
   }, [authState]);
 
-  // September 21 login and sign-up actions.
+  // Serialize redirects so double taps cannot overwrite the PKCE verifier.
   const login = useCallback(async () => {
-    await initiateLogin(await getAuthConfigWithReferral(currentLang));
+    if (authActionPending.current) return;
+    authActionPending.current = true;
+    sessionVersion.current += 1;
+    setError(null);
+    setAuthState('authenticating');
+    try {
+      const config = await getAuthConfigWithReferral(currentLang);
+      loginRedirectPending.current = true;
+      await initiateLogin(config);
+    } catch (problem) {
+      loginRedirectPending.current = false;
+      authActionPending.current = false;
+      setAuthState('unauthenticated');
+      setError(problem instanceof Error ? problem.message : 'Could not open Deriv login. Please try again.');
+      throw problem;
+    }
   }, [currentLang]);
 
   // Initiate sign-up — adds prompt=registration and partner attribution params
   const signUp = useCallback(async () => {
-    await initiateSignUp(await getAuthConfigWithReferral(currentLang));
+    if (authActionPending.current) return;
+    authActionPending.current = true;
+    sessionVersion.current += 1;
+    setError(null);
+    setAuthState('authenticating');
+    try {
+      const config = await getAuthConfigWithReferral(currentLang);
+      loginRedirectPending.current = true;
+      await initiateSignUp(config);
+    } catch (problem) {
+      loginRedirectPending.current = false;
+      authActionPending.current = false;
+      setAuthState('unauthenticated');
+      setError(problem instanceof Error ? problem.message : 'Could not open Deriv sign-up. Please try again.');
+      throw problem;
+    }
   }, [currentLang]);
 
   // Invalidate unfinished auth/account requests before clearing the session.
@@ -424,6 +457,9 @@ export function useAuth(): UseAuthReturn {
     authActionPending.current = true;
     activeAccountIdRef.current = null;
     coreLogout();
+    // Persist across the full logout navigation and cancelled login attempts.
+    // Only a completed fresh authentication clears this requirement.
+    localStorage.setItem('circletool_require_login', 'true');
     cleanupUrl(getAuthConfig().redirectUri);
     setAccounts([]);
     setActiveAccountId(null);

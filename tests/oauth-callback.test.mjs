@@ -26,3 +26,14 @@ test('wrong callback state cannot contact the token endpoint',async()=>{
 test('expired-session refresh also uses the Circletool server',async()=>{
  const f=setup();await f.context.api.refreshAccessToken('refresh','app');assert.equal(f.calls[0].url,'/api/deriv-token');assert.equal(new URLSearchParams(f.calls[0].options.body).get('grant_type'),'refresh_token');
 });
+
+for (const action of ['callback','refresh']) test(`late ${action} response after logout cannot save old credentials`,async()=>{
+ const f=setup();let finish;let current=true;
+ f.context.fetch=()=>new Promise(resolve=>{finish=resolve;});
+ const task=action==='callback'
+   ? f.context.api.handleOAuthCallback(f.context.window.location.href,{clientId:'app',redirectUri:'https://circletool.pro'},()=>current)
+   : f.context.api.refreshAccessToken('refresh','app',()=>current);
+ current=false;
+ finish({ok:true,json:async()=>({access_token:'old',refresh_token:'old-refresh',expires_in:3600})});
+ await assert.rejects(task,/cancelled/);assert.equal(f.saved(),null);
+});
