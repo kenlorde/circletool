@@ -8,7 +8,7 @@ const hookSource = stripTypeScriptTypes((await readFile(new URL('../hooks/use-di
 const buySource = stripTypeScriptTypes((await readFile(new URL('../packages/core/src/react/useBuy.ts', import.meta.url), 'utf8')).replace(/^import[\s\S]*?;\n/gm, '').replace('export function useBuy', 'function useBuy'));
 function fixture(recent = false, deferredBuy = false) {
   const slots = []; let cursor = 0;
-  const requests = []; let resolveQuote, resolveBuy;
+  const requests = []; const refreshes = []; let resolveQuote, resolveBuy;
   const ws = { async send(request) {
     requests.push(request);
     if (request.proposal) return new Promise(resolve => { resolveQuote = resolve; });
@@ -21,13 +21,13 @@ function fixture(recent = false, deferredBuy = false) {
     useRef(initial) { const i = cursor++; if (!(i in slots)) slots[i] = { current: initial }; return slots[i]; },
     useMemo: fn => fn(), useCallback: fn => fn, useEffect() {}, Date, Set,
     useBaseTrading: () => base,
-    useProposal: () => ({ proposal: { id: 'displayed', askPrice: 10, payout: 18, ...(recent ? {receivedAt:Date.now()} : {}) } }),
+    useProposal: (_ws, _connected, params) => ({ refresh: () => refreshes.push(params.contractType), proposal: { id: 'displayed', askPrice: 10, payout: 18, ...(recent ? {receivedAt:Date.now()} : {}) } }),
     computeDigitStats: () => ({}), getLastDigit: () => 0,
   };
   vm.createContext(context); vm.runInContext(buySource + '\n' + hookSource, context);
   const render = () => { cursor = 0; return context.useDigitsTrading({ ws: base.ws, isConnected: base.isConnected, isAuthenticated: true, isRealAccount: base.isRealAccount ?? true }); };
-  const finishQuote = (price = 10) => resolveQuote({ proposal: { id: 'fresh', ask_price: price, payout: 18 } });
-  return { render, requests, base, finishQuote, finishBuy:()=>resolveBuy({buy:{contract_id:42,buy_price:10,payout:18}}) };
+  const finishQuote = (price = 10, payout = 18) => resolveQuote({ proposal: { id: 'fresh', ask_price: price, payout } });
+  return { render, requests, refreshes, base, finishQuote, finishBuy:()=>resolveBuy({buy:{contract_id:42,buy_price:10,payout:18}}) };
 }
 for (const [type, mode] of [['over-under', 'DIGITUNDER'], ['even-odd', 'DIGITODD'], ['matches-differs', 'DIGITDIFF']]) {
   test(`first tap purchases ${mode} and permits the next trade`, async () => {
@@ -101,4 +101,33 @@ test('fast buy stays locked until broker confirmation, then releases without wai
  assert.equal(f.requests[0].buy,'displayed');assert.equal(f.render().isBuying,true);
  await f.render().buyContract('DIGITUNDER');assert.equal(f.requests.length,1);
  f.finishBuy();await first;assert.equal(f.render().isBuying,false);assert.equal(f.render().buyResult.contractId,42);
+});
+
+for (const mode of ['DIGITOVER', 'DIGITUNDER']) {
+  for (const payout of [17, 19, NaN]) {
+    test(`${mode} rejects replacement payout ${payout} and refreshes both direction buttons`, async () => {
+      const f = fixture();
+      const purchase = f.render().buyContract(mode);
+      assert.equal(f.requests[0].contract_type, mode);
+      f.finishQuote(10, payout);
+      await purchase;
+      assert.equal(f.requests.some(r => r.buy), false);
+      assert.match(f.render().buyError, /payout changed/);
+      assert.ok(f.refreshes.includes('DIGITOVER'));
+      assert.ok(f.refreshes.includes('DIGITUNDER'));
+      // The blocked purchase releases its lock and the next reviewed quote can buy.
+      const retry = f.render().buyContract(mode);
+      f.finishQuote();
+      await retry;
+      assert.equal(f.requests.filter(r => r.buy).length, 1);
+    });
+  }
+}
+test('a lower replacement stake also requires reviewing the new quote', async () => {
+  const f = fixture();
+  const purchase = f.render().buyContract('DIGITUNDER');
+  f.finishQuote(9, 18);
+  await purchase;
+  assert.equal(f.requests.some(r => r.buy), false);
+  assert.match(f.render().buyError, /Price changed/);
 });

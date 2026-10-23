@@ -253,7 +253,7 @@ export function useDigitsTrading({
       selectedDigit,
     ]);
 
-  const { proposal } = useProposal(
+  const { proposal, refresh: refreshSelected } = useProposal(
     tradingWs,
     tradingIsConnected,
     proposalParams
@@ -333,6 +333,14 @@ export function useDigitsTrading({
         assertCurrentSettings();
         const fresh = response.proposal;
         if (!fresh) throw new Error('No fresh purchase quote returned.');
+        // A quote refresh must never silently change the terms on the button.
+        // Re-render both directions and require another tap if either amount changed.
+        if (Number(fresh.ask_price) !== quote.askPrice || Number(fresh.payout) !== quote.payout) {
+          refreshSelected?.();
+          refreshFirst?.();
+          refreshSecond?.();
+          throw new Error('Price changed or payout changed. Review the updated quote and tap Buy again.');
+        }
         consume(fresh.id);
         return {
           id: fresh.id, askPrice: Number(fresh.ask_price), payout: Number(fresh.payout),
@@ -344,7 +352,7 @@ export function useDigitsTrading({
     } finally {
       purchaseLock.current = false;
     }
-  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit]);
+  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit, refreshSelected, refreshFirst, refreshSecond]);
 
   return {
     isConnected,
