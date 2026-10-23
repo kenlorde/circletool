@@ -87,16 +87,44 @@ export async function runSmartAI(input: {
     if (!Number.isFinite(amount) || amount <= 0) return report('Next stake is invalid. Stopped.');
     // Reserve the entire next stake, as in the existing native bots.
     if (profit <= -s.lossLimit || amount > s.lossLimit + profit + 0.000001) return report('Loss limit reached, or remaining allowance is below the next stake. Stopped.');
+    // Never attempt a purchase that exceeds the live real-account balance.
+    // A failed or unavailable balance check stops trading rather than guessing.
+    const balanceReply = await request<{ balance?: { balance?: number | string; currency?: string; loginid?: string } }>({ balance: 1 });
+    const available = Number(balanceReply.balance?.balance);
+    if (!Number.isFinite(available) || available < 0 || (balanceReply.balance?.currency && balanceReply.balance.currency !== input.currency) || (balanceReply.balance?.loginid && balanceReply.balance.loginid !== input.accountId))
+      return report('Account balance could not be verified. Bot stopped.');
+    if (amount > available + 0.000001)
+      return report(`Next stake ${amount.toFixed(2)} ${input.currency} exceeds available balance ${available.toFixed(2)} ${input.currency}. Bot stopped.`);
     report(`Requesting ${contract.label} quote…`);
     const quote = await request<{ proposal?: { id?: string; ask_price?: number | string } }>({ proposal: 1, amount, basis: 'stake', contract_type: contract.contractType, ...(contract.barrier === undefined ? {} : { barrier: contract.barrier }), currency: input.currency, duration: s.ticks, duration_unit: 't', underlying_symbol: input.symbol });
     if (!active()) return report('Stopped before purchase.');
     const price = Number(quote.proposal?.ask_price);
     if (!quote.proposal?.id || !Number.isFinite(price) || price <= 0 || Math.abs(price - amount) > 0.000001 || price > s.lossLimit + profit + 0.000001) throw Error('Quote does not match the stake or loss allowance. No purchase sent.');
+    // Confirm the quoted price against the balance immediately before buying.
+    // Quote requests can take time, and account funds may change in between.
+    const latestReply = await request<{ balance?: { balance?: number | string; currency?: string; loginid?: string } }>({ balance: 1 });
+    const latestBalance = Number(latestReply.balance?.balance);
+    if (!Number.isFinite(latestBalance) || latestBalance < 0 || (latestReply.balance?.currency && latestReply.balance.currency !== input.currency) || (latestReply.balance?.loginid && latestReply.balance.loginid !== input.accountId))
+      return report('Account balance could not be verified. Bot stopped.');
+    if (price > latestBalance + 0.000001)
+      return report(`Next stake ${price.toFixed(2)} ${input.currency} exceeds available balance ${latestBalance.toFixed(2)} ${input.currency}. Bot stopped.`);
     // Persist before sending buy: a missing confirmation must never be retried.
     report(`Purchasing ${contract.label}…`);
     if (!active()) return report('Stopped before purchase.');
     pending.set('unknown');
-    const purchase = await request<{ buy?: { contract_id?: number | string } }>({ buy: quote.proposal.id, price: String(price) });
+    let purchase: { buy?: { contract_id?: number | string } };
+    try {
+      purchase = await request<{ buy?: { contract_id?: number | string } }>({ buy: quote.proposal.id, price: String(price) });
+    } catch (error) {
+      // Only a definitive broker rejection can safely unlock this attempt.
+      // Timeouts, disconnects, and missing confirmations remain locked.
+      const code = (error as { code?: string })?.code;
+      if (typeof code === 'string' && ['InsufficientBalance', 'InvalidContractProposal', 'PriceMoved', 'ContractCreationFailure', 'InvalidOfferings'].includes(code)) {
+        pending.clear();
+        return report(`Purchase rejected by Deriv (${code}). Bot stopped.`);
+      }
+      throw error;
+    }
     const id = Number(purchase.buy?.contract_id);
     if (!Number.isSafeInteger(id) || id <= 0) throw Error('Purchase confirmation missing. Check account transactions before restarting.');
     pending.set(String(id));
