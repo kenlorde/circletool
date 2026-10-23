@@ -8,7 +8,7 @@ const hookSource = stripTypeScriptTypes((await readFile(new URL('../hooks/use-di
 const buySource = stripTypeScriptTypes((await readFile(new URL('../packages/core/src/react/useBuy.ts', import.meta.url), 'utf8')).replace(/^import[\s\S]*?;\n/gm, '').replace('export function useBuy', 'function useBuy'));
 function fixture(recent = false, deferredBuy = false) {
   const slots = []; let cursor = 0;
-  const requests = []; const refreshes = []; let resolveQuote, resolveBuy;
+  const requests = []; const refreshes = []; const displayed = new Map(); let resolveQuote, resolveBuy;
   const ws = { async send(request) {
     requests.push(request);
     if (request.proposal) return new Promise(resolve => { resolveQuote = resolve; });
@@ -21,13 +21,13 @@ function fixture(recent = false, deferredBuy = false) {
     useRef(initial) { const i = cursor++; if (!(i in slots)) slots[i] = { current: initial }; return slots[i]; },
     useMemo: fn => fn(), useCallback: fn => fn, useEffect() {}, Date, Set,
     useBaseTrading: () => base,
-    useProposal: (_ws, _connected, params) => ({ refresh: () => refreshes.push(params.contractType), proposal: { id: 'displayed', askPrice: 10, payout: 18, ...(recent ? {receivedAt:Date.now()} : {}) } }),
+    useProposal: (_ws, _connected, params) => ({ refresh: () => refreshes.push(params.contractType), updateProposal: quote => displayed.set(params.contractType, quote), proposal: { id: 'displayed', askPrice: 10, payout: 18, ...(recent ? {receivedAt:Date.now()} : {}) } }),
     computeDigitStats: () => ({}), getLastDigit: () => 0,
   };
   vm.createContext(context); vm.runInContext(buySource + '\n' + hookSource, context);
   const render = () => { cursor = 0; return context.useDigitsTrading({ ws: base.ws, isConnected: base.isConnected, isAuthenticated: true, isRealAccount: base.isRealAccount ?? true }); };
   const finishQuote = (price = 10, payout = 18) => resolveQuote({ proposal: { id: 'fresh', ask_price: price, payout } });
-  return { render, requests, refreshes, base, finishQuote, finishBuy:()=>resolveBuy({buy:{contract_id:42,buy_price:10,payout:18}}) };
+  return { render, requests, refreshes, displayed, base, finishQuote, finishBuy:()=>resolveBuy({buy:{contract_id:42,buy_price:10,payout:18}}) };
 }
 for (const [type, mode] of [['over-under', 'DIGITUNDER'], ['even-odd', 'DIGITODD'], ['matches-differs', 'DIGITDIFF']]) {
   test(`first tap purchases ${mode} and permits the next trade`, async () => {
@@ -104,30 +104,39 @@ test('fast buy stays locked until broker confirmation, then releases without wai
 });
 
 for (const mode of ['DIGITOVER', 'DIGITUNDER']) {
-  for (const payout of [17, 19, NaN]) {
-    test(`${mode} rejects replacement payout ${payout} and refreshes both direction buttons`, async () => {
+  for (const payout of [17, 19]) {
+    test(`${mode} automatically publishes and purchases replacement payout ${payout} in one tap`, async () => {
       const f = fixture();
       const purchase = f.render().buyContract(mode);
       assert.equal(f.requests[0].contract_type, mode);
       f.finishQuote(10, payout);
       await purchase;
-      assert.equal(f.requests.some(r => r.buy), false);
-      assert.match(f.render().buyError, /payout changed/);
-      assert.ok(f.refreshes.includes('DIGITOVER'));
-      assert.ok(f.refreshes.includes('DIGITUNDER'));
-      // The blocked purchase releases its lock and the next reviewed quote can buy.
-      const retry = f.render().buyContract(mode);
-      f.finishQuote();
-      await retry;
+      assert.equal(f.render().buyError, null);
       assert.equal(f.requests.filter(r => r.buy).length, 1);
+      assert.equal(f.requests.at(-1).buy, 'fresh');
+      assert.equal(f.displayed.get(mode).id, 'fresh');
+      assert.equal(f.displayed.get(mode).payout, payout);
+      if (mode === 'DIGITOVER') assert.equal(f.displayed.has('DIGITUNDER'), false);
+      else assert.notEqual(f.displayed.get('DIGITOVER')?.id, 'fresh');
     });
   }
+  test(`${mode} rejects an invalid refreshed payout without buying`, async () => {
+    const f = fixture();
+    const purchase = f.render().buyContract(mode);
+    f.finishQuote(10, NaN);
+    await purchase;
+    assert.equal(f.requests.some(r => r.buy), false);
+    assert.equal(f.displayed.size, 0);
+    assert.match(f.render().buyError, /No valid purchase quote/);
+  });
 }
-test('a lower replacement stake also requires reviewing the new quote', async () => {
+test('a lower replacement price automatically updates the display within the original stake cap', async () => {
   const f = fixture();
   const purchase = f.render().buyContract('DIGITUNDER');
   f.finishQuote(9, 18);
   await purchase;
-  assert.equal(f.requests.some(r => r.buy), false);
-  assert.match(f.render().buyError, /Price changed/);
+  assert.equal(f.render().buyError, null);
+  assert.equal(f.displayed.get('DIGITUNDER').askPrice, 9);
+  assert.equal(f.requests.at(-1).buy, 'fresh');
+  assert.equal(f.requests.at(-1).price, '10');
 });

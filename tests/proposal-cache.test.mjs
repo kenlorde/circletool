@@ -72,3 +72,13 @@ test('fast quote fallback is cancelled as soon as the original answers',()=>{
  const f=fixture(),ws=socket();f.render(ws);f.flush();ws.handlers[0](response);
  assert.equal(f.timers.size,0);assert.equal(ws.requests.length,1);
 });
+
+test('publishing a purchase quote updates only matching settings and account', () => {
+ const f=fixture(),ws=socket(),other=socket();
+ f.render(ws);f.flush();
+ f.render(ws).updateProposal({id:'purchase',askPrice:10,payout:19,receivedAt:Date.now()});
+ assert.equal(f.render(ws).proposal.id,'purchase');
+ assert.equal(f.render(ws).proposal.payout,19);
+ assert.equal(f.render(ws,{contractType:'DIGITOVER'}).proposal,null);
+ assert.equal(f.render(other).proposal,null);
+});

@@ -7,6 +7,7 @@ import type { ProposalResponse, ProposalInfo, ProposalParams } from '../types';
 interface UseProposalReturn {
   proposal: ProposalInfo | null;
   refresh: () => void;
+  updateProposal: (proposal: ProposalInfo) => void;
 }
 
 export function useProposal(
@@ -18,6 +19,11 @@ export function useProposal(
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision(value => value + 1), []);
   const key = JSON.stringify(params);
+  // Publish the same fresh quote the caller is about to purchase.
+  // The existing key/socket checks isolate it from other settings and accounts.
+  const updateProposal = useCallback((proposal: ProposalInfo) => {
+    if (ws && isConnected && params) setQuote({ key, ws, proposal });
+  }, [key, ws, isConnected]);
   const proposal = isConnected && params && quote?.key === key && quote.ws === ws ? quote.proposal : null;
   const unsubRef = useRef<(() => void) | null>(null);
   const retryAttempt = useRef(0);
@@ -124,5 +130,5 @@ export function useProposal(
   // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally using individual param fields to avoid re-subscribing on object reference changes
   }, [ws, isConnected, params?.contractType, params?.symbol, params?.amount, params?.duration, params?.durationUnit, params?.barrier, params?.basis, params?.currency, params?.dateExpiry, revision]);
 
-  return { proposal, refresh };
+  return { proposal, refresh, updateProposal };
 }

@@ -253,7 +253,7 @@ export function useDigitsTrading({
       selectedDigit,
     ]);
 
-  const { proposal, refresh: refreshSelected } = useProposal(
+  const { proposal, updateProposal: updateSelected } = useProposal(
     tradingWs,
     tradingIsConnected,
     proposalParams
@@ -265,9 +265,9 @@ export function useDigitsTrading({
     'matches-differs': ['DIGITMATCH', 'DIGITDIFF'],
   };
   const [firstMode, secondMode] = modePair[tradeType];
-  const { proposal: firstProposal, refresh: refreshFirst } = useProposal(tradingWs, tradingIsConnected,
+  const { proposal: firstProposal, refresh: refreshFirst, updateProposal: updateFirst } = useProposal(tradingWs, tradingIsConnected,
     proposalParams ? { ...proposalParams, contractType: firstMode } : null);
-  const { proposal: secondProposal, refresh: refreshSecond } = useProposal(tradingWs, tradingIsConnected,
+  const { proposal: secondProposal, refresh: refreshSecond, updateProposal: updateSecond } = useProposal(tradingWs, tradingIsConnected,
     proposalParams ? { ...proposalParams, contractType: secondMode } : null);
   // Prepare the next quotes after broker confirmation, outside the next tap's
   // critical path. Both directions refresh in parallel; no purchase is retried.
@@ -333,26 +333,29 @@ export function useDigitsTrading({
         assertCurrentSettings();
         const fresh = response.proposal;
         if (!fresh) throw new Error('No fresh purchase quote returned.');
-        // A quote refresh must never silently change the terms on the button.
-        // Re-render both directions and require another tap if either amount changed.
-        if (Number(fresh.ask_price) !== quote.askPrice || Number(fresh.payout) !== quote.payout) {
-          refreshSelected?.();
-          refreshFirst?.();
-          refreshSecond?.();
-          throw new Error('Price changed or payout changed. Review the updated quote and tap Buy again.');
-        }
-        consume(fresh.id);
-        return {
+        const freshQuote: ProposalInfo = {
+          receivedAt: Date.now(),
           id: fresh.id, askPrice: Number(fresh.ask_price), payout: Number(fresh.payout),
           longcode: fresh.longcode,
           minStake: Number(fresh.validation_params?.stake?.min ?? 0),
           maxPayout: Number(fresh.validation_params?.payout?.max ?? 0),
         };
+        if (!freshQuote.id || !Number.isFinite(freshQuote.askPrice) || freshQuote.askPrice <= 0 ||
+            !Number.isFinite(freshQuote.payout) || freshQuote.payout <= 0) {
+          throw new Error('No valid purchase quote returned.');
+        }
+        // Refresh the displayed payout for the requested direction before buying.
+        // The purchase still uses that exact quote ID and the original stake cap.
+        if (requestedMode === firstMode) updateFirst(freshQuote);
+        if (requestedMode === secondMode) updateSecond(freshQuote);
+        if (requestedMode === contractMode) updateSelected(freshQuote);
+        consume(freshQuote.id);
+        return freshQuote;
       });
     } finally {
       purchaseLock.current = false;
     }
-  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit, refreshSelected, refreshFirst, refreshSecond]);
+  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit, updateSelected, updateFirst, updateSecond]);
 
   return {
     isConnected,
