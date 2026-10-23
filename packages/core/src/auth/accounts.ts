@@ -12,7 +12,8 @@ import { getApiBaseUrl } from '../config/urls';
  */
 export async function fetchAccounts(
   authInfo: AuthInfo,
-  clientId: string
+  clientId: string,
+  isCurrent: () => boolean = () => true
 ): Promise<DerivAccount[]> {
   const response = await fetch(`${getApiBaseUrl()}/accounts`, {
     signal: AbortSignal.timeout(15000),
@@ -29,6 +30,7 @@ export async function fetchAccounts(
   const data = await response.json();
   const accounts: DerivAccount[] = data.data;
 
+  if (!isCurrent()) return accounts;
   storeDerivAccounts(accounts);
 
   if (accounts.length > 0) {

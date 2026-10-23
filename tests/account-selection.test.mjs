@@ -16,7 +16,7 @@ for (const [name, accounts, preferred, expected] of [
 ]) {
   test(name, async () => {
     const selected = {};
-    const context = { sessionVersion: { current: 0 }, clearAllAuthData() {}, fetchAccounts: async () => accounts, getAuthConfig: () => ({clientId: 'test'}),
+    const context = { localStorage:{removeItem(){}}, sessionVersion: { current: 0 }, clearAllAuthData() {}, fetchAccounts: async () => accounts, getAuthConfig: () => ({clientId: 'test'}),
       setAccounts() {}, setActiveLoginId: id => selected.storedId = id,
       setAccountType: type => selected.type = type, setActiveAccountId: id => selected.id = id,
       fetchOTPUrl: async id => { selected.otpAccount = id; return 'wss://test'; }, setWsUrl() {}, setAuthState() {} };
@@ -43,6 +43,6 @@ for (const stage of ['accounts', 'otp']) {
     sessionVersion.current++;
     resolvePending(stage === 'accounts' ? [real] : 'wss://test');
     await task;
-    assert.deepEqual(writes, ['clear']);
+    assert.deepEqual(writes, []);
   });
 }

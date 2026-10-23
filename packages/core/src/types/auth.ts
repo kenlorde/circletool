@@ -1,4 +1,6 @@
 export interface AuthConfig {
+  /** Require a fresh provider sign-in after an explicit logout. */
+  forceLogin?: boolean;
   clientId: string;
   redirectUri: string;
   /** OAuth scopes as a space-separated string. Defaults to 'trade account_manage' */

@@ -60,6 +60,10 @@ function appendAttributionParams(params: URLSearchParams, config: AuthConfig): v
  */
 export async function buildAuthorizationUrl(config: AuthConfig): Promise<string> {
   const params = await buildPkceParams(config);
+  if (config.forceLogin) {
+    params.set('prompt', 'login');
+    params.set('max_age', '0');
+  }
   appendAttributionParams(params, config);
   return `${getAuthBaseUrl()}/auth?${params.toString()}`;
 }
@@ -148,7 +152,7 @@ export function validateCallback(params: CallbackParams, redirectUri: string): s
 /**
  * Exchange authorization code for access and refresh tokens.
  */
-export async function exchangeCodeForTokens(params: TokenExchangeParams): Promise<AuthInfo> {
+export async function exchangeCodeForTokens(params: TokenExchangeParams, isCurrent: () => boolean = () => true): Promise<AuthInfo> {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code: params.code,
@@ -179,6 +183,7 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams): Promis
     refresh_token: tokenData.refresh_token,
   };
 
+  if (!isCurrent()) throw new OAuthError('Authentication was cancelled');
   storeAuthInfo(authInfo);
   clearCodeVerifier();
 
@@ -190,7 +195,8 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams): Promis
  */
 export async function refreshAccessToken(
   refreshToken: string,
-  clientId: string
+  clientId: string,
+  isCurrent: () => boolean = () => true
 ): Promise<AuthInfo> {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -206,7 +212,7 @@ export async function refreshAccessToken(
   });
 
   if (!response.ok) {
-    clearAllAuthData();
+    if (isCurrent()) clearAllAuthData();
     throw new OAuthError(`Token refresh failed (${response.status})`);
   }
 
@@ -220,6 +226,7 @@ export async function refreshAccessToken(
     refresh_token: tokenData.refresh_token,
   };
 
+  if (!isCurrent()) throw new OAuthError('Authentication was cancelled');
   storeAuthInfo(authInfo);
   return authInfo;
 }
@@ -230,7 +237,8 @@ export async function refreshAccessToken(
  */
 export async function handleOAuthCallback(
   callbackUrl: string,
-  config: AuthConfig
+  config: AuthConfig,
+  isCurrent: () => boolean = () => true
 ): Promise<AuthInfo> {
   const params = parseCallbackParams(callbackUrl);
   const code = validateCallback(params, config.redirectUri);
@@ -245,7 +253,7 @@ export async function handleOAuthCallback(
     clientId: config.clientId,
     redirectUri: config.redirectUri,
     codeVerifier,
-  });
+  }, isCurrent);
 
   cleanupUrl(config.redirectUri);
   return authInfo;
