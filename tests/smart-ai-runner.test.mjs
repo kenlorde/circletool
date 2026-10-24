@@ -204,3 +204,57 @@ test('late definitive rejections unlock only their own attempt', async () => {
   captureSmartAIConfirmation({echo_req:payload,error:{code:'InsufficientBalance'}},f.input.pending,f.input.onTransaction);
   assert.equal(f.pending(),null);
 });
+
+test('one-tap restart waits for the previous contract to settle before buying once', async () => {
+  const f=fixture(), send=f.input.ws.send; let checks=0;
+  f.input.pending.set('99');
+  f.input.ws.send=async p=>{
+    if(p.proposal_open_contract && p.contract_id===99) {
+      f.calls.push(p); checks++;
+      assert.equal(f.calls.filter(p=>p.buy).length,0);
+      return {proposal_open_contract:{contract_id:99,is_sold:checks>=3?1:0,profit:0.2}};
+    }
+    return send(p);
+  };
+  const result=await runSmartAI({...f.input,autoResumePending:true,recoverPurchases:true});
+  assert.equal(checks,3);assert.equal(result.trades,1);
+  assert.equal(f.calls.filter(p=>p.buy).length,1);assert.equal(f.pending(),null);
+});
+
+test('second tap during recovery stops restart and retains the previous open contract', async () => {
+  const f=fixture();f.input.pending.set('99');
+  const result=await runSmartAI({...f.input,autoResumePending:true,onProgress:p=>{
+    if(p.message.includes('Waiting for settlement before restarting')) f.controller.abort();
+  },ws:{async send(p){f.calls.push(p);return {proposal_open_contract:{contract_id:99,is_sold:0}};}}});
+  assert.match(result.message,/Stopped/);assert.equal(f.pending(),'99');
+  assert.equal(f.calls.filter(p=>p.buy).length,0);
+});
+
+test('late confirmation during automatic recovery settles the original buy without a second buy', async () => {
+  const f=fixture(),send=f.input.ws.send;let confirm;
+  f.input.ws.send=p=>p.buy?(f.calls.push(p),new Promise(resolve=>{confirm=resolve})):send(p);
+  let resolved=false;
+  const result=await runSmartAI({...f.input,recoverPurchases:true,autoResumePending:true,recoveryWaitMs:100,onProgress:p=>{
+    if(p.message.startsWith('Waiting for the previous purchase')&&!resolved){resolved=true;confirm({buy:{contract_id:123}});}
+  }});
+  assert.equal(result.trades,1);assert.equal(f.pending(),null);
+  assert.equal(f.calls.filter(p=>p.buy).length,1);
+});
+
+test('automatic restart never clears an unresolved buy just because history has no open positions', async () => {
+  const f=fixture(), send=f.input.ws.send;
+  f.input.ws.send=p=>p.buy?(f.calls.push(p),new Promise(()=>{})):send(p);
+  const input={...f.input,recoverPurchases:true,autoResumePending:true,recoveryWaitMs:5};
+  await assert.rejects(runSmartAI(input),/timed out/);
+  const attempt=f.pending();
+  await assert.rejects(runSmartAI(input),/Purchase needs verification/);
+  assert.equal(f.pending(),attempt);assert.equal(f.calls.filter(p=>p.buy).length,1);
+});
+
+test('recovery settlement timeout preserves the pending contract and sends no buy', async () => {
+  const f=fixture();f.input.pending.set('99');
+  f.input.ws.send=async p=>{f.calls.push(p);return {proposal_open_contract:{contract_id:99,is_sold:0}};};
+  await assert.rejects(runSmartAI({...f.input,autoResumePending:true,settlementTimeoutMs:5}),/still open/);
+  assert.equal(f.pending(),'99');assert.equal(f.calls.filter(p=>p.buy).length,0);
+});
+

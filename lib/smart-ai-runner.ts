@@ -81,7 +81,7 @@ export async function runSmartAI(input: {
   findTransaction: (id: number) => BotTransaction | undefined;
   onTransaction: (transaction: BotTransaction) => void;
   onProgress: (progress: SmartAIProgress) => void; refreshBalance: () => Promise<unknown>;
-  recoverPurchases?: boolean; requestTimeoutMs?: number; pollMs?: number; paceMs?: number; settlementTimeoutMs?: number;
+  recoverPurchases?: boolean; autoResumePending?: boolean; recoveryWaitMs?: number; requestTimeoutMs?: number; pollMs?: number; paceMs?: number; settlementTimeoutMs?: number;
 }) {
   const { settings: s, ws, signal, pending } = input;
   if (input.accountType !== 'real') throw Error('Bots require a real account. Demo accounts are not supported.');
@@ -103,6 +103,16 @@ export async function runSmartAI(input: {
     if (contract.profit === undefined || contract.profit === null || contract.profit === '' || !Number.isFinite(Number(contract.profit))) throw Error('Settlement profit unavailable. Check account transactions.');
     return Number(contract.profit);
   };
+  // Waiting never sends another buy or guesses which history entry belongs to us.
+  // Only the original attempt's confirmation/rejection can resolve an unknown buy.
+  const waitForConfirmation = async () => {
+    const deadline = Date.now() + (input.recoveryWaitMs ?? 15000);
+    while (smartAIHasUnknownPurchase(pending.get()) && active() && Date.now() < deadline) {
+      report('Waiting for the previous purchase confirmation. No new buy will be sent.');
+      await delay(input.pollMs ?? 250);
+    }
+    return pending.get();
+  };
   let previous = pending.get();
   if (previous) {
     if (smartAIHasUnknownPurchase(previous)) {
@@ -111,29 +121,44 @@ export async function runSmartAI(input: {
       const history = await checkSmartAIHistory({ send: request });
       // A late confirmation may have resolved the attempt while history loaded.
       previous = pending.get();
+      if (input.autoResumePending && readSmartAIAttempt(previous)) previous = await waitForConfirmation();
+      if (input.autoResumePending && !active()) return report('Stopped. Previous purchase remains tracked; no new buy sent.');
       if (smartAIHasUnknownPurchase(previous)) throw Error(`Purchase needs verification. Deriv history checked: ${history.openCount} open position(s). Use Recover previous purchase below to verify the contract or confirm no purchase occurred.`);
-      if (!previous) return report('Deriv confirmed the purchase was rejected. Press Start to begin again.');
+      if (!previous && !input.autoResumePending) return report('Deriv confirmed the purchase was rejected. Press Start to begin again.');
     }
-    const id = Number(previous);
-    if (!Number.isSafeInteger(id) || id <= 0) throw Error('Invalid pending contract. Check account transactions.');
-    // A confirmed contract ID can be queried again safely; this never repeats a buy.
-    let response: { proposal_open_contract?: Contract } | undefined;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        response = await request<{ proposal_open_contract?: Contract }>({ proposal_open_contract: 1, contract_id: id });
-        break;
-      } catch (error) {
-        if (!active()) throw error;
-        if (attempt === 2) throw Error('Could not verify previous contract with Deriv. Bot stopped; no new purchase sent.');
-        await delay(500 * (attempt + 1));
+    if (previous) {
+      const id = Number(previous);
+      if (!Number.isSafeInteger(id) || id <= 0) throw Error('Invalid pending contract. Check account transactions.');
+      // A confirmed contract ID can be queried again safely; this never repeats a buy.
+      let response: { proposal_open_contract?: Contract } | undefined;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          response = await request<{ proposal_open_contract?: Contract }>({ proposal_open_contract: 1, contract_id: id });
+          break;
+        } catch (error) {
+          if (!active()) throw error;
+          if (attempt === 2) throw Error('Could not verify previous contract with Deriv. Bot stopped; no new purchase sent.');
+          await delay(500 * (attempt + 1));
+        }
       }
+      let recovered = closed(response?.proposal_open_contract, id);
+      if (recovered === undefined && input.autoResumePending) {
+        const deadline = Date.now() + (input.settlementTimeoutMs ?? 180000);
+        while (recovered === undefined && active() && Date.now() < deadline) {
+          report(`Previous contract ${id} is open. Waiting for settlement before restarting…`);
+          await delay(input.pollMs ?? 1200);
+          if (!active()) break;
+          response = await request<{ proposal_open_contract?: Contract }>({ proposal_open_contract: 1, contract_id: id });
+          recovered = closed(response.proposal_open_contract, id);
+        }
+        if (!active()) return report('Stopped. Previous contract remains tracked; no new buy sent.');
+      }
+      if (recovered === undefined) throw Error('A previous bot contract is still open. Wait for settlement before restarting.');
+      const transaction = input.findTransaction(id);
+      if (transaction) input.onTransaction({ ...transaction, profit: recovered, settledAt: Date.now(), status: recovered > 0 ? 'won' : recovered < 0 ? 'lost' : 'break-even' });
+      pending.clear();
+      try { await input.refreshBalance(); } catch { report('Previous contract reconciled; balance refresh failed. Checking live balance before any new purchase.'); }
     }
-    const recovered = closed(response?.proposal_open_contract, id);
-    if (recovered === undefined) throw Error('A previous bot contract is still open. Wait for settlement before restarting.');
-    const transaction = input.findTransaction(id);
-    if (transaction) input.onTransaction({ ...transaction, profit: recovered, settledAt: Date.now(), status: recovered > 0 ? 'won' : recovered < 0 ? 'lost' : 'break-even' });
-    pending.clear();
-    try { await input.refreshBalance(); } catch { report('Previous contract reconciled; balance refresh failed. Checking live balance before any new purchase.'); }
   }
   if (!active()) return report('Stopped before purchase.');
   const portfolio = await request<{ portfolio?: { contracts: unknown[] } }>({ portfolio: 1 });
@@ -190,7 +215,12 @@ export async function runSmartAI(input: {
         pending.clear();
         return report(`Purchase rejected by Deriv (${code}). Bot stopped.`);
       }
-      throw error;
+      if (!input.autoResumePending || !attempt) throw error;
+      const resolved = await waitForConfirmation();
+      if (!active()) return report('Stopped. Previous purchase remains tracked; no new buy sent.');
+      const recoveredId = Number(resolved);
+      if (!resolved || smartAIHasUnknownPurchase(resolved) || !Number.isSafeInteger(recoveredId) || recoveredId <= 0) throw error;
+      purchase = { buy: { contract_id: recoveredId } };
     }
     const id = Number(purchase.buy?.contract_id);
     if (!Number.isSafeInteger(id) || id <= 0) throw Error('Purchase confirmation missing. Check account transactions before restarting.');
@@ -230,3 +260,4 @@ export async function runSmartAI(input: {
   }
   return report('Stopped. No further purchases.');
 }
+

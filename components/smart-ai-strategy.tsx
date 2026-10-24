@@ -119,6 +119,8 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
   }, []);
   useEffect(() => { session.current?.abort(); }, [ws, isConnected, auth.activeAccount?.account_id, auth.authState, auth.activeAccount?.account_type]);
   async function start() {
+    // Read the ref so a rapid second tap stops even before React rerenders.
+    if (session.current) { stop(); return; }
     if (auth.activeAccount?.account_type !== 'real') { setProgress(previous => ({ ...previous, message: 'Bots require a real account. Demo accounts are not supported.' })); return; }
     if (session.current || recoveryBusy || sessionLock.current || !ws || !isConnected || auth.authState !== 'authenticated' || !auth.activeAccount?.account_id || !market.activeSymbol || !selectedContractAvailable) return;
     const accountId = auth.activeAccount.account_id;
@@ -131,7 +133,7 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
       if (!supported) throw Error('This tick duration is unavailable for the selected direction and market. Choose a supported duration.');
       await runSmartAI({
         settings: { stake: Number(stake), ticks: Number(ticks), target: Number(target), lossLimit: Number(limit), martingale: Number(martingale), useList, stakeList: stakeList.split(',').map(value => Number(value.trim())), contractType, prediction: Number(prediction) },
-        recoverPurchases: true, ws, symbol: market.activeSymbol.underlying_symbol, currency, accountId, accountType: auth.activeAccount.account_type, signal: controller.signal,
+        recoverPurchases: true, autoResumePending: true, ws, symbol: market.activeSymbol.underlying_symbol, currency, accountId, accountType: auth.activeAccount.account_type, signal: controller.signal,
         isCurrent: () => mounted.current && accountRef.current.ws === ws && accountRef.current.accountId === accountId && accountRef.current.authenticated && accountRef.current.isConnected && ws.isConnected,
         pending: { get: () => localStorage.getItem(key), set: value => localStorage.setItem(key, value), clear: () => localStorage.removeItem(key) },
         findTransaction: id => readBotTransactions(accountId).find(t => t.contractId === id),
@@ -168,7 +170,8 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
       {!market.isLoading && market.activeSymbol && !selectedContractAvailable && <p role="status" className="text-sm text-amber-500">{directionLabel} is unavailable on this market. Choose another volatility index.</p>}
       {auth.activeAccount?.account_type !== 'real' && <p role="status" className="text-sm text-amber-500">Bots require a real account. Switch to a real account to start.</p>}
       <p className="text-sm">Account: {auth.activeAccount ? `${auth.activeAccount.account_type} · ${auth.activeAccount.account_id}` : 'Not logged in'}.</p>
-      <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={busy || recoveryBusy || auth.activeAccount?.account_type !== 'real' || !isConnected || !market.activeSymbol || !selectedContractAvailable}>Start bot</Button>}<Button variant="destructive" disabled={!busy} onClick={stop}>Stop</Button></div>
+      <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={!busy && (recoveryBusy || auth.activeAccount?.account_type !== 'real' || !isConnected || !market.activeSymbol || !selectedContractAvailable)}>{busy ? 'Stop bot' : 'Start bot'}</Button>}<Button variant="destructive" disabled={!busy} onClick={stop}>Stop</Button></div>
+      <p className="text-sm text-muted-foreground">Tap once to start; tap again to stop further buys. Restart waits for a confirmed previous contract to settle.</p>
     </div>
     <div className="rounded-xl border p-5" aria-live="polite"><p id="smart-ai-status">{progress.message}</p><div className="mt-4 flex gap-8"><span>Trades: <b>{progress.trades}</b></span><span>Net profit: <b>{progress.profit.toFixed(2)} {currency}</b></span></div><p className="mt-3 text-sm">Wins: {progress.wins} · Losses: {progress.losses} · Next stake: {progress.nextStake.toFixed(2)} {currency}</p><p className="mt-3 text-sm">Options account balance: {auth.activeAccount?.balance ?? '—'} {currency}</p><Button className="mt-3" variant="outline" onClick={() => void balanceSync.refresh()} disabled={!isConnected || !auth.wsUrl}>Refresh balance</Button>{balanceSync.error && <p role="status" className="mt-2 text-sm text-amber-500">{balanceSync.error}</p>}</div>
     {needsRecovery && <div className="space-y-3 rounded-xl border p-5" aria-label="Recover previous purchase">
@@ -184,3 +187,4 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
     <p className="text-sm text-muted-foreground">Keep this page open. Leaving or backgrounding the app stops new purchases. Martingale increases stakes after losses. The runner stops if the next stake exceeds the remaining loss allowance or the stake list is exhausted. Trading can lose money.</p>
   </section>;
 }
+
