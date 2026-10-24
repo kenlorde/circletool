@@ -42,7 +42,7 @@ export function readSmartAIAttempt(value: string | null): PurchaseAttempt | unde
   } catch { /* Old versions stored the literal "unknown". */ }
   return undefined;
 }
-const definitiveRejections = ['InsufficientBalance', 'InvalidContractProposal', 'PriceMoved', 'ContractCreationFailure', 'InvalidOfferings'];
+const definitiveRejections = ['InsufficientBalance', 'InvalidContractProposal', 'PriceMoved', 'ContractCreationFailure', 'InvalidOfferings', 'InputValidationFailed'];
 export function captureSmartAIConfirmation(message: Record<string, unknown>, pending: PendingStore, onTransaction: (t: BotTransaction) => void) {
   const attempt = readSmartAIAttempt(pending.get());
   const echo = message.echo_req as { passthrough?: { smart_ai_attempt?: string } } | undefined;
@@ -69,6 +69,27 @@ export async function checkSmartAIHistory(ws: Transport) {
   if (!Array.isArray(open.portfolio?.contracts) || !Array.isArray(closed.profit_table?.transactions)) throw Error('Deriv history could not be verified. Purchase remains locked.');
   const ids = [...open.portfolio.contracts, ...closed.profit_table.transactions].map(c => Number(c.contract_id)).filter(id => Number.isSafeInteger(id) && id > 0);
   return { openCount: open.portfolio.contracts.length, ids: [...new Set(ids)] };
+}
+
+// The second tap is an explicit request to discard this exact unconfirmed
+// attempt. A fresh broker check is required on both taps; no random contract
+// ID is chosen from account history, and a late confirmation always wins.
+export async function prepareSmartAIStart(input: {
+  ws: Transport; pending: PendingStore; confirmedAttempt: string | null; isCurrent: () => boolean;
+}): Promise<{ ready: true } | { ready: false; attempt: string }> {
+  const previous = input.pending.get();
+  if (!smartAIHasUnknownPurchase(previous)) return { ready: true };
+  const history = await checkSmartAIHistory(input.ws);
+  if (!input.isCurrent()) throw Error('Start cancelled because the account or connection changed.');
+  const current = input.pending.get();
+  if (current !== previous) {
+    if (!smartAIHasUnknownPurchase(current)) return { ready: true };
+    throw Error('Previous purchase changed. Tap Start to check it again.');
+  }
+  if (history.openCount) throw Error('Deriv still has an open contract. Wait for settlement before restarting.');
+  if (input.confirmedAttempt !== previous) return { ready: false, attempt: previous! };
+  input.pending.clear();
+  return { ready: true };
 }
 export function validateSmartAISettings(s: SmartAISettings) {
   if (![s.stake, s.ticks, s.target, s.lossLimit, s.martingale].every(n => Number.isFinite(n) && n > 0) || !Number.isInteger(s.ticks)) throw Error('Enter positive settings and a whole number of ticks.');
@@ -204,7 +225,7 @@ export async function runSmartAI(input: {
     }) };
     let purchase: { buy?: { contract_id?: number | string } };
     try {
-      const payload = { buy: quote.proposal.id, price: String(price), ...(attempt ? { passthrough: { smart_ai_attempt: attempt.token } } : {}) };
+      const payload = { buy: quote.proposal.id, price: input.recoverPurchases ? price : String(price), ...(attempt ? { passthrough: { smart_ai_attempt: attempt.token } } : {}) };
       // Capture the underlying promise even when the runner's timeout has fired.
       purchase = await request<{ buy?: { contract_id?: number | string } }>(payload, purchaseTransport);
     } catch (error) {
@@ -213,7 +234,7 @@ export async function runSmartAI(input: {
       const code = (error as { code?: string })?.code;
       if (typeof code === 'string' && definitiveRejections.includes(code)) {
         pending.clear();
-        return report(`Purchase rejected by Deriv (${code}). Bot stopped.`);
+        return report(`Purchase rejected by Deriv (${code}): ${error instanceof Error ? error.message : 'Request was rejected.'}`);
       }
       if (!input.autoResumePending || !attempt) throw error;
       const resolved = await waitForConfirmation();
@@ -260,4 +281,5 @@ export async function runSmartAI(input: {
   }
   return report('Stopped. No further purchases.');
 }
+
 

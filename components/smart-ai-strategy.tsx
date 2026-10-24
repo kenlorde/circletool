@@ -4,7 +4,7 @@ import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useBaseTrading } from '@/hooks/use-base-trading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { runSmartAI, captureSmartAIConfirmation, checkSmartAIHistory, smartAIHasUnknownPurchase, SMART_AI_CONTRACTS, type SmartAIProgress } from '@/lib/smart-ai-runner';
+import { runSmartAI, captureSmartAIConfirmation, prepareSmartAIStart, SMART_AI_CONTRACTS, type SmartAIProgress } from '@/lib/smart-ai-runner';
 import { readBotTransactions, type BotTransaction, type SmartAIContractType } from '@/lib/bot-transactions';
 
 export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }: { sessionLock: RefObject<boolean>; onRunStateChange: (running: boolean) => void; onTransaction: (transaction: BotTransaction) => void }) {
@@ -48,62 +48,21 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
   const mounted = useRef(true);
   const accountRef = useRef({ ws, accountId: auth.activeAccount?.account_id, authenticated: auth.authState === 'authenticated' && auth.activeAccount?.account_type === 'real', isConnected });
   accountRef.current = { ws, accountId: auth.activeAccount?.account_id, authenticated: auth.authState === 'authenticated' && auth.activeAccount?.account_type === 'real', isConnected };
-  const [needsRecovery, setNeedsRecovery] = useState(false);
-  const [recoveryBusy, setRecoveryBusy] = useState(false);
-  const [recoveryId, setRecoveryId] = useState('');
-  const [historyIds, setHistoryIds] = useState<number[]>([]);
-  const [confirmedNoPurchase, setConfirmedNoPurchase] = useState(false);
+  const [resetAttempt, setResetAttempt] = useState<string | null>(null);
   const recoveryKey = auth.activeAccount?.account_id ? 'circletool-under7-pending:' + auth.activeAccount.account_id : null;
   useEffect(() => {
-    setRecoveryId(''); setHistoryIds([]); setConfirmedNoPurchase(false);
-    setNeedsRecovery(!!recoveryKey && smartAIHasUnknownPurchase(localStorage.getItem(recoveryKey)));
+    setResetAttempt(null);
+  }, [ws, recoveryKey, isConnected]);
+  useEffect(() => {
     if (!ws || !recoveryKey) return;
     const store = { get: () => localStorage.getItem(recoveryKey), set: (v: string) => localStorage.setItem(recoveryKey, v), clear: () => localStorage.removeItem(recoveryKey) };
     return ws.onMessage(message => {
       if (captureSmartAIConfirmation(message, store, onTransaction)) {
-        setNeedsRecovery(false);
-        if (!session.current) setProgress(p => ({ ...p, message: 'Delayed purchase confirmation recovered. Press Start to verify settlement before trading.' }));
+        setResetAttempt(null);
+        if (!session.current) setProgress(p => ({ ...p, message: 'Purchase confirmation recovered. Tap Start to check settlement and continue.' }));
       }
     });
   }, [ws, recoveryKey, onTransaction]);
-  async function recover(mode: 'check' | 'contract' | 'no-purchase') {
-    if (!ws || !isConnected || !recoveryKey || busy || recoveryBusy || sessionLock.current) return;
-    const activeWs = ws, accountId = auth.activeAccount?.account_id;
-    const stillCurrent = () => accountRef.current.ws === activeWs && accountRef.current.accountId === accountId && accountRef.current.authenticated && accountRef.current.isConnected;
-    setRecoveryBusy(true); sessionLock.current = true;
-    const original = localStorage.getItem(recoveryKey);
-    try {
-      const history = await checkSmartAIHistory(ws);
-      if (!stillCurrent()) return;
-      setHistoryIds(history.ids);
-      if (mode === 'check') {
-        setProgress(p => ({ ...p, message: `Deriv history checked: ${history.openCount} open position(s). Select the previous contract ID, or check Deriv history and confirm no purchase occurred.` }));
-        return;
-      }
-      if (!smartAIHasUnknownPurchase(original) || localStorage.getItem(recoveryKey) !== original) throw Error('Purchase state changed. Press Start to verify the recovered contract.');
-      if (mode === 'contract') {
-        const id = Number(recoveryId);
-        if (!Number.isSafeInteger(id) || id <= 0) throw Error('Enter the previous purchase contract ID from Deriv history.');
-        const reply = await ws.send<{ proposal_open_contract?: { contract_id?: number | string; is_sold?: number | boolean; profit?: number | string } }>({ proposal_open_contract: 1, contract_id: id });
-        const contract = reply.proposal_open_contract;
-        if (Number(contract?.contract_id) !== id) throw Error('Deriv could not verify that contract. Purchase remains locked.');
-        if (!stillCurrent()) return;
-        if (localStorage.getItem(recoveryKey) !== original) throw Error('Purchase state changed. Press Start to verify it.');
-        // Keep the ID until the runner verifies settlement; open trades never unlock buying.
-        localStorage.setItem(recoveryKey, String(id));
-        setNeedsRecovery(false);
-        setProgress(p => ({ ...p, message: 'Previous contract verified. Press Start to check settlement before any new purchase.' }));
-      } else {
-        if (!confirmedNoPurchase) throw Error('First confirm you checked Deriv history and no purchase occurred.');
-        if (history.openCount) throw Error('An account position is still open. Wait for settlement or verify its contract ID.');
-        localStorage.removeItem(recoveryKey);
-        setNeedsRecovery(false); setConfirmedNoPurchase(false);
-        setProgress(p => ({ ...p, message: 'Unconfirmed attempt cleared after your history check. Press Start to begin.' }));
-      }
-    } catch (error) {
-      if (stillCurrent()) setProgress(p => ({ ...p, message: error instanceof Error ? error.message : 'Recovery failed. Purchase remains locked.' }));
-    } finally { sessionLock.current = false; if (mounted.current) setRecoveryBusy(false); }
-  }
   const initializedMarket = useRef(false);
   useEffect(() => {
     if (!initializedMarket.current && market.symbols.length) {
@@ -122,7 +81,9 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
     // Read the ref so a rapid second tap stops even before React rerenders.
     if (session.current) { stop(); return; }
     if (auth.activeAccount?.account_type !== 'real') { setProgress(previous => ({ ...previous, message: 'Bots require a real account. Demo accounts are not supported.' })); return; }
-    if (session.current || recoveryBusy || sessionLock.current || !ws || !isConnected || auth.authState !== 'authenticated' || !auth.activeAccount?.account_id || !market.activeSymbol || !selectedContractAvailable) return;
+    if (sessionLock.current) { setProgress(previous => ({ ...previous, message: 'Another bot session is still active. Stop it before starting Smart AI.' })); return; }
+    if (!ws || !isConnected || auth.authState !== 'authenticated' || !auth.activeAccount?.account_id) { setProgress(previous => ({ ...previous, message: 'Waiting for the account connection. Tap Start once connected.' })); return; }
+    if (!market.activeSymbol || !selectedContractAvailable) { setProgress(previous => ({ ...previous, message: 'The selected market or direction is not ready. Choose an available market and try again.' })); return; }
     const accountId = auth.activeAccount.account_id;
     const controller = new AbortController();
     const key = 'circletool-under7-pending:' + accountId;
@@ -131,11 +92,22 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
       const duration = Number(ticks);
       const supported = market.contracts.some(c => c.contract_type === contractType && c.min_contract_duration.endsWith('t') && duration >= parseInt(c.min_contract_duration, 10) && (!c.max_contract_duration.endsWith('t') || duration <= parseInt(c.max_contract_duration, 10)));
       if (!supported) throw Error('This tick duration is unavailable for the selected direction and market. Choose a supported duration.');
+      const pending = { get: () => localStorage.getItem(key), set: (value: string) => localStorage.setItem(key, value), clear: () => localStorage.removeItem(key) };
+      const isCurrent = () => !controller.signal.aborted && mounted.current && accountRef.current.ws === ws && accountRef.current.accountId === accountId && accountRef.current.authenticated && accountRef.current.isConnected && ws.isConnected;
+      setProgress(previous => ({ ...previous, message: 'Checking account before starting…' }));
+      const prepared = await prepareSmartAIStart({ ws, pending, confirmedAttempt: resetAttempt, isCurrent });
+      if (!isCurrent()) return;
+      if (prepared.ready === false) {
+        setResetAttempt(prepared.attempt);
+        setProgress(previous => ({ ...previous, message: 'Deriv reports no open contracts. Review Deriv transaction history. To discard this unconfirmed attempt and start a new session, tap “Clear unconfirmed attempt & start”. This does not cancel a purchased contract.' }));
+        return;
+      }
+      setResetAttempt(null);
       await runSmartAI({
         settings: { stake: Number(stake), ticks: Number(ticks), target: Number(target), lossLimit: Number(limit), martingale: Number(martingale), useList, stakeList: stakeList.split(',').map(value => Number(value.trim())), contractType, prediction: Number(prediction) },
         recoverPurchases: true, autoResumePending: true, ws, symbol: market.activeSymbol.underlying_symbol, currency, accountId, accountType: auth.activeAccount.account_type, signal: controller.signal,
         isCurrent: () => mounted.current && accountRef.current.ws === ws && accountRef.current.accountId === accountId && accountRef.current.authenticated && accountRef.current.isConnected && ws.isConnected,
-        pending: { get: () => localStorage.getItem(key), set: value => localStorage.setItem(key, value), clear: () => localStorage.removeItem(key) },
+        pending,
         findTransaction: id => readBotTransactions(accountId).find(t => t.contractId === id),
         onTransaction,
         onProgress: next => { if (mounted.current) setProgress(next); },
@@ -145,7 +117,6 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
       if (mounted.current) setProgress(previous => ({ ...previous, message: error instanceof Error ? error.message : 'Bot stopped after an error.' }));
     } finally {
       session.current = null; sessionLock.current = false;
-      if (mounted.current && accountRef.current.accountId === accountId) setNeedsRecovery(smartAIHasUnknownPurchase(localStorage.getItem(key)));
       if (mounted.current) { setBusy(false); onRunStateChange(false); }
     }
   }
@@ -170,21 +141,12 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
       {!market.isLoading && market.activeSymbol && !selectedContractAvailable && <p role="status" className="text-sm text-amber-500">{directionLabel} is unavailable on this market. Choose another volatility index.</p>}
       {auth.activeAccount?.account_type !== 'real' && <p role="status" className="text-sm text-amber-500">Bots require a real account. Switch to a real account to start.</p>}
       <p className="text-sm">Account: {auth.activeAccount ? `${auth.activeAccount.account_type} · ${auth.activeAccount.account_id}` : 'Not logged in'}.</p>
-      <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={!busy && (recoveryBusy || auth.activeAccount?.account_type !== 'real' || !isConnected || !market.activeSymbol || !selectedContractAvailable)}>{busy ? 'Stop bot' : 'Start bot'}</Button>}<Button variant="destructive" disabled={!busy} onClick={stop}>Stop</Button></div>
+      <div className="flex gap-3">{auth.authState !== 'authenticated' ? <Button onClick={() => auth.login()}>Log in</Button> : <Button onClick={start} disabled={!busy && (auth.activeAccount?.account_type !== 'real' || !isConnected || !market.activeSymbol || !selectedContractAvailable)}>{busy ? 'Stop bot' : resetAttempt ? 'Clear unconfirmed attempt & start' : 'Start bot'}</Button>}<Button variant="destructive" disabled={!busy} onClick={stop}>Stop</Button></div>
       <p className="text-sm text-muted-foreground">Tap once to start; tap again to stop further buys. Restart waits for a confirmed previous contract to settle.</p>
     </div>
     <div className="rounded-xl border p-5" aria-live="polite"><p id="smart-ai-status">{progress.message}</p><div className="mt-4 flex gap-8"><span>Trades: <b>{progress.trades}</b></span><span>Net profit: <b>{progress.profit.toFixed(2)} {currency}</b></span></div><p className="mt-3 text-sm">Wins: {progress.wins} · Losses: {progress.losses} · Next stake: {progress.nextStake.toFixed(2)} {currency}</p><p className="mt-3 text-sm">Options account balance: {auth.activeAccount?.balance ?? '—'} {currency}</p><Button className="mt-3" variant="outline" onClick={() => void balanceSync.refresh()} disabled={!isConnected || !auth.wsUrl}>Refresh balance</Button>{balanceSync.error && <p role="status" className="mt-2 text-sm text-amber-500">{balanceSync.error}</p>}</div>
-    {needsRecovery && <div className="space-y-3 rounded-xl border p-5" aria-label="Recover previous purchase">
-      <h3 className="font-semibold">Recover previous purchase</h3>
-      <p className="text-sm">Check the previous trade before restarting. Recovery does not place a purchase.</p>
-      <Button variant="outline" onClick={() => void recover('check')} disabled={busy || recoveryBusy || !isConnected}>Check Deriv history</Button>
-      {!!historyIds.length && <p className="text-sm break-all">Recent contract IDs: {historyIds.join(', ')}</p>}
-      <label className="block">Previous contract ID<Input value={recoveryId} inputMode="numeric" onChange={e => setRecoveryId(e.target.value)} disabled={busy || recoveryBusy} /></label>
-      <Button onClick={() => void recover('contract')} disabled={busy || recoveryBusy || !isConnected || !recoveryId}>Verify previous contract</Button>
-      <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmedNoPurchase} onChange={e => setConfirmedNoPurchase(e.target.checked)} disabled={busy || recoveryBusy} />I checked Deriv transaction history and confirm this attempt did not purchase a contract.</label>
-      <Button variant="outline" onClick={() => void recover('no-purchase')} disabled={busy || recoveryBusy || !isConnected || !confirmedNoPurchase}>Clear verified failed attempt</Button>
-    </div>}
     <p className="text-sm text-muted-foreground">Keep this page open. Leaving or backgrounding the app stops new purchases. Martingale increases stakes after losses. The runner stops if the next stake exceeds the remaining loss allowance or the stake list is exhausted. Trading can lose money.</p>
   </section>;
 }
+
 
