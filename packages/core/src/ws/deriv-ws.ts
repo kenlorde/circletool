@@ -78,10 +78,15 @@ export class DerivWS {
   private url: string;
   private isConnecting = false;
   private requestTimeoutMs: number;
+  private connectionPromise: Promise<void> | null = null;
+  private connectionVersion = 0;
+  private attemptedConnection = false;
+  private refreshUrl?: () => Promise<string>;
 
-  constructor(url?: string, requestTimeoutMs = 15000) {
+  constructor(url?: string, requestTimeoutMs = 15000, refreshUrl?: () => Promise<string>) {
     this.url = url ?? getPublicWsUrl();
     this.requestTimeoutMs = requestTimeoutMs;
+    this.refreshUrl = refreshUrl;
   }
 
   private addPending(reqId: number, pending: PendingRequest): void {
@@ -137,23 +142,27 @@ export class DerivWS {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return Promise.resolve();
     }
-    if (this.isConnecting) {
-      return new Promise((resolve) => {
-        const check = setInterval(() => {
-          if (this.ws?.readyState === WebSocket.OPEN) {
-            clearInterval(check);
-            resolve();
-          }
-        }, 100);
-      });
-    }
+    if (this.connectionPromise) return this.connectionPromise;
 
     this.isConnecting = true;
+    const version = this.connectionVersion;
+    const needsFreshUrl = this.attemptedConnection && !!this.refreshUrl;
+    this.attemptedConnection = true;
 
-    return new Promise((resolve, reject) => {
+    const connection = (async () => {
+      if (needsFreshUrl) this.url = await this.refreshUrl!();
+      if (version !== this.connectionVersion) throw new Error('Connection cancelled');
+      await new Promise<void>((resolve, reject) => {
       this.ws = new WebSocket(this.url);
+      const socket = this.ws;
+      const handshakeTimer = setTimeout(() => {
+        reject(new Error('WebSocket connection timed out'));
+        socket.close();
+      }, this.requestTimeoutMs);
 
       this.ws.onopen = () => {
+        clearTimeout(handshakeTimer);
+        if (version !== this.connectionVersion || socket !== this.ws) { socket.close(); reject(new Error('Connection cancelled')); return; }
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.startPing();
@@ -162,16 +171,21 @@ export class DerivWS {
       };
 
       this.ws.onmessage = (event) => {
+        if (version !== this.connectionVersion || socket !== this.ws) return;
         const data = JSON.parse(event.data);
         this.handleMessage(data);
       };
 
       this.ws.onerror = () => {
-        this.isConnecting = false;
+        clearTimeout(handshakeTimer);
         reject(new Error('WebSocket connection error'));
+        socket.close();
       };
 
       this.ws.onclose = () => {
+        clearTimeout(handshakeTimer);
+        reject(new Error('WebSocket connection closed'));
+        if (version !== this.connectionVersion || socket !== this.ws) return;
         this.isConnecting = false;
         this.stopPing();
         this.rejectPending();
@@ -179,7 +193,28 @@ export class DerivWS {
         this.notifyConnectionState(false);
         this.attemptReconnect();
       };
+      });
+    })();
+    this.connectionPromise = connection.catch(error => {
+      // OTP fetch failures happen before a socket exists, so there is no close
+      // event to schedule their retry.
+      if (version === this.connectionVersion && !this.reconnectTimeout && !this.isConnected) this.attemptReconnect();
+      throw error;
+    }).finally(() => {
+      if (version === this.connectionVersion) {
+        this.isConnecting = false;
+        this.connectionPromise = null;
+      }
     });
+    return this.connectionPromise;
+  }
+
+  resume(): Promise<void> {
+    if (this.isConnected || this.connectionPromise) return this.connect();
+    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+    this.reconnectTimeout = null;
+    this.reconnectAttempts = 0;
+    return this.connect();
   }
 
   /**
@@ -261,6 +296,9 @@ export class DerivWS {
   }
 
   disconnect(): void {
+    this.connectionVersion++;
+    this.connectionPromise = null;
+    this.isConnecting = false;
     this.stopPing();
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -338,6 +376,7 @@ export class DerivWS {
   }
 
   private attemptReconnect(): void {
+    if (this.reconnectTimeout) return;
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       for (const handler of this.reconnectExhaustedHandlers) handler();
       return;
@@ -347,7 +386,9 @@ export class DerivWS {
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
 
     this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null;
       this.connect().catch(() => {});
     }, delay);
   }
 }
+

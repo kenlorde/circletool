@@ -15,6 +15,7 @@ export interface UseDerivWSOptions {
    * an account switch (must reconnect) from an OTP refresh (keep alive).
    */
   accountId?: string;
+  getReconnectUrl?: () => Promise<string>;
 }
 
 interface UseDerivWSReturn {
@@ -34,7 +35,9 @@ interface UseDerivWSReturn {
  * - OTP refresh (url changes, same accountId): updateUrl() only — live socket untouched
  */
 export function useDerivWS(options?: UseDerivWSOptions): UseDerivWSReturn {
-  const { url, accountId } = options ?? {};
+  const { url, accountId, getReconnectUrl } = options ?? {};
+  const reconnectUrlRef = useRef(getReconnectUrl);
+  reconnectUrlRef.current = getReconnectUrl;
 
   const wsRef = useRef<DerivWS | null>(null);
   const listenersRef = useRef(new Set<() => void>());
@@ -57,14 +60,14 @@ export function useDerivWS(options?: UseDerivWSOptions): UseDerivWSReturn {
   useEffect(() => {
     let disposed = false;
 
-    const instance = new DerivWS(url);
+    const instance = new DerivWS(url, 15000, url && getReconnectUrl ? () => reconnectUrlRef.current!() : undefined);
     wsRef.current = instance;
     listenersRef.current.forEach((l) => l());
 
     const unsubscribeState = instance.onConnectionStateChange((connected) => {
       if (!disposed) {
         setIsConnected(connected);
-        if (connected) setError(null);
+        if (connected) { setError(null); setIsExhausted(false); }
       }
     });
 
@@ -77,10 +80,24 @@ export function useDerivWS(options?: UseDerivWSOptions): UseDerivWSReturn {
         setError(err instanceof Error ? err.message : 'Connection failed');
       }
     });
+    const resume = () => {
+      if (document.hidden || disposed) return;
+      void instance.resume().catch(err => {
+        if (!disposed) setError(err instanceof Error ? err.message : 'Connection failed');
+      });
+    };
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    const recoveryTimer = setInterval(() => {
+      if (!instance.isConnected) resume();
+    }, 30000);
 
     const listeners = listenersRef.current;
     return () => {
       disposed = true;
+      clearInterval(recoveryTimer);
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
       setIsConnected(false);
       setIsExhausted(false);
       unsubscribeState();
@@ -104,3 +121,4 @@ export function useDerivWS(options?: UseDerivWSOptions): UseDerivWSReturn {
 
   return { ws, isConnected, isExhausted, error };
 }
+

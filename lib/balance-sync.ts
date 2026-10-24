@@ -79,6 +79,8 @@ export function createBalanceSync(ws: Transport, accountId: string,
     }).finally(() => { finished = true; });
   };
   subscribe();
+  // Verify immediately even if a subscription is accepted without an initial frame.
+  void refresh();
   const poll = setInterval(() => { void refresh(); }, options.pollMs ?? 30000);
   return { refresh, dispose() {
     disposed = true; clearInterval(poll); if (retry) clearTimeout(retry);
@@ -86,3 +88,4 @@ export function createBalanceSync(ws: Transport, accountId: string,
     timers.clear(); if (unsubscribe) void unsubscribe();
   } };
 }
+

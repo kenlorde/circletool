@@ -80,3 +80,25 @@ test('an old account request cannot erase a newer OAuth transaction',async()=>{
   finish([{account_id:'old-account',account_type:'real'}]);await pending;
   assert.deepEqual(events,[]);
 });
+
+const reconnectStart=source.indexOf('  const refreshWebSocketUrl = useCallback(');
+const reconnectEnd=source.indexOf('\n  // Complete auth:',reconnectStart);
+const reconnectCode=stripTypeScriptTypes(source.slice(reconnectStart,reconnectEnd)+';globalThis.reconnect=refreshWebSocketUrl;');
+test('reconnection renews an expired token and fetches OTP for the selected account',async()=>{
+  const calls=[];
+  const context={useCallback:fn=>fn,sessionVersion:{current:0},activeAccountIdRef:{current:'REAL1'},Date,
+    getAuthInfo:()=>({access_token:'old',refresh_token:'refresh',expires_at:1}),getAuthConfig:()=>({clientId:'app'}),
+    refreshAccessToken:async()=>{calls.push('refresh');return {access_token:'new'};},
+    fetchOTPUrl:async(id,auth)=>{calls.push([id,auth.access_token]);return 'wss://fresh';}};
+  vm.createContext(context);vm.runInContext(reconnectCode,context);
+  assert.equal(await context.reconnect(),'wss://fresh');assert.deepEqual(calls,['refresh',['REAL1','new']]);
+});
+test('account changes during reconnect discard the previous accounts OTP',async()=>{
+  let finish;
+  const context={useCallback:fn=>fn,sessionVersion:{current:0},activeAccountIdRef:{current:'REAL1'},Date,
+    getAuthInfo:()=>({access_token:'token'}),fetchOTPUrl:()=>new Promise(resolve=>{finish=resolve;})};
+  vm.createContext(context);vm.runInContext(reconnectCode,context);
+  const pending=context.reconnect();context.activeAccountIdRef.current='REAL2';finish('wss://wrong-account');
+  await assert.rejects(pending,/Account changed/);
+});
+

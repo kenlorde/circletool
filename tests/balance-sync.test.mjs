@@ -23,6 +23,7 @@ test('accepts finite numeric/string balances and rejects malformed values', () =
 });
 test('post-settlement refresh reads authoritative balance instead of adding session profit', async () => {
   const f = fixture(); try {
+    await tick(); f.calls.length = 0;
     assert.equal(await f.sync.refresh(true), true);
     assert.deepEqual(f.calls, [{ balance: 1 }]);
     assert.equal(f.updates[0].balance, '101.20');
@@ -98,3 +99,46 @@ test('disconnect rejects pending settlement instead of leaving bot busy forever'
   const pending = ws.send({ proposal_open_contract: 1, contract_id: 123 });
   ws.disconnect(); await assert.rejects(pending, /connection closed/);
 });
+
+test('authenticated reconnect requests a fresh OTP URL and sends no purchase', async () => {
+  let refreshes=0;
+  const ws=new DerivWS('wss://used-once',100,async()=>{refreshes++;return 'wss://fresh-'+refreshes;});
+  await ws.connect();const original=MockSocket.instance;
+  original.close();
+  await ws.resume();
+  try {
+    assert.equal(refreshes,1);assert.notEqual(MockSocket.instance,original);
+    assert.equal(ws.url,'wss://fresh-1');assert.equal(ws.isConnected,true);
+    assert.equal(MockSocket.instance.lastMessage,undefined);
+  } finally {ws.disconnect();}
+});
+
+test('concurrent reconnect calls share one OTP request and settle together', async () => {
+  const otp=deferred();let refreshes=0;
+  const ws=new DerivWS('wss://initial',100,()=>{refreshes++;return otp.promise;});
+  await ws.connect();MockSocket.instance.close();
+  const first=ws.resume(),second=ws.connect();assert.equal(first,second);
+  otp.resolve('wss://fresh');await Promise.all([first,second]);
+  try {assert.equal(refreshes,1);assert.equal(ws.isConnected,true);}finally{ws.disconnect();}
+});
+
+test('logout during OTP refresh cannot open the old account socket', async () => {
+  const otp=deferred();const ws=new DerivWS('wss://initial',100,()=>otp.promise);
+  await ws.connect();const original=MockSocket.instance;original.close();
+  const connection=ws.resume();ws.disconnect();otp.resolve('wss://old-account');
+  await assert.rejects(connection,/cancelled/);
+  assert.equal(MockSocket.instance,original);assert.equal(ws.isConnected,false);
+});
+
+test('OTP fetch failure can recover without reusing the consumed URL', async () => {
+  let attempts=0;
+  const ws=new DerivWS('wss://initial',100,async()=>{if(++attempts===1)throw Error('network');return 'wss://new';});
+  await ws.connect();MockSocket.instance.close();
+  await assert.rejects(ws.resume(),/network/);
+  await ws.resume();try{assert.equal(attempts,2);assert.equal(ws.url,'wss://new');}finally{ws.disconnect();}
+});
+
+test('balance is verified immediately even when a subscription sends no initial frame', async () => {
+  const f=fixture();try{await tick();assert.equal(f.updates[0].balance,'101.20');assert.equal(f.statuses.at(-1).error,null);}finally{f.sync.dispose();}
+});
+

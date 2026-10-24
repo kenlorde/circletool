@@ -133,6 +133,7 @@ export interface UseAuthReturn {
   activeAccount: DerivAccount | null;
   activeAccountId: string | null;
   wsUrl: string | undefined;
+  refreshWebSocketUrl: () => Promise<string>;
   login: () => Promise<void>;
   signUp: () => Promise<void>;
   logout: () => void;
@@ -170,6 +171,19 @@ export function useAuth(): UseAuthReturn {
     },
     []
   );
+
+  const refreshWebSocketUrl = useCallback(async (): Promise<string> => {
+    const version = sessionVersion.current;
+    const accountId = activeAccountIdRef.current;
+    let authInfo = getAuthInfo(true);
+    if (!accountId || !authInfo) throw new Error('Please log in to reconnect your account.');
+    if (authInfo.expires_at && Date.now() / 1000 >= authInfo.expires_at) {
+      authInfo = await refreshAccessToken(authInfo.refresh_token, getAuthConfig().clientId);
+    }
+    const url = await fetchOTPUrl(accountId, authInfo);
+    if (version !== sessionVersion.current || accountId !== activeAccountIdRef.current) throw new Error('Account changed during reconnect.');
+    return url;
+  }, [fetchOTPUrl]);
 
   // Complete auth: fetch accounts → get OTP → set WS URL
   const completeAuth = useCallback(
@@ -361,9 +375,9 @@ export function useAuth(): UseAuthReturn {
         setWsUrl(otpUrl);
       } catch {
         if (version !== sessionVersion.current) return;
-        clearAllAuthData();
-        setAuthState('unauthenticated');
-        setWsUrl(undefined);
+        // A temporary OTP/network failure must not discard the signed-in
+        // account. The socket recovery path retries with a fresh URL.
+        setError('Connection interrupted. Reconnecting to your account…');
       }
     };
 
@@ -502,6 +516,7 @@ export function useAuth(): UseAuthReturn {
     activeAccount,
     activeAccountId,
     wsUrl,
+    refreshWebSocketUrl,
     login,
     signUp,
     logout,
@@ -510,3 +525,4 @@ export function useAuth(): UseAuthReturn {
     error,
   };
 }
+
