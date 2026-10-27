@@ -1,4 +1,5 @@
 'use client';
+import { CircleNav } from '@/components/custom/circle-nav';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -64,7 +65,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
   </main>;
   return <main className="circle-access">
     <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={() => start()} onSignUp={() => start(true)} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} appName="Circletool" />
-    <nav className="access-nav" aria-label="Circletool sections">{sections.map(([href, name]) => <Link href={href} key={href}>{name} <LockKeyhole size={13} aria-hidden /></Link>)}</nav>
+    <CircleNav />
     <section className="access-card" aria-labelledby="access-heading">
       <div className="access-lock"><LockKeyhole size={38} aria-hidden /></div>
       <span className="access-label">Restricted access</span>

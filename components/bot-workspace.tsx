@@ -1,4 +1,5 @@
 'use client';
+import { CircleNav } from '@/components/custom/circle-nav';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Download, FileCode2, FolderOpen, Save, Upload, Undo2, Redo2, ZoomIn, ZoomOut, LayoutDashboard, Bot, Play, Square } from 'lucide-react';
@@ -188,7 +189,7 @@ export function BotWorkspace() {
   return <main className="bot-builder h-dvh overflow-y-auto bg-background text-foreground lg:h-auto lg:min-h-screen">
     <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={auth.login} onSignUp={auth.signUp} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} appName="Circletool" />
     <div className="h-[76px] shrink-0" />
-    <nav className="builder-nav" aria-label="Bot sections"><Link href="/dashboard"><LayoutDashboard size={20} />Dashboard</Link><span aria-current="page"><Bot size={20} />Bot Builder</span><Link href="/smart-ai">Free Bots</Link><Link href="/academy">Academy</Link></nav>
+    <CircleNav />
     <div className="mx-auto w-full px-3 py-4 pb-32">
       <Link href="/dashboard" className="text-sm underline">← Dashboard</Link>
       <div className="my-5 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-bold">Bot Builder</h1><p className="mt-2 text-sm text-muted-foreground">Upload, edit, and run supported digit XML bots inside Circletool.</p></div><span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{dirty ? 'Unsaved changes' : xml ? 'Saved' : 'XML editor'}</span></div>

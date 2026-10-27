@@ -1,4 +1,5 @@
 'use client';
+import { CircleNav } from '@/components/custom/circle-nav';
 import { useEffect, useRef, useState } from 'react';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useBaseTrading } from '@/hooks/use-base-trading';
@@ -79,7 +80,7 @@ export function SmartScanner() {
   }
   return <main className="smart-scanner-page">
     <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={auth.login} onSignUp={auth.signUp} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} appName="Circletool" />
-    <nav className="smart-scanner-nav" aria-label="Trading sections"><Link href="/">▣ Manual Trader</Link><Link href="/smart-scanner" aria-current="page">⌕ Smart Scanner</Link><Link href="/smart-ai">♧ Free Bots</Link><Link href="/dashboard">Dashboard</Link><Link href="/copy-trading">Copy Trading</Link><Link href="/tick-analysis">Tick Analysis</Link><Link href="/charts">Charts</Link><Link href="/academy">Academy</Link></nav>
+    <CircleNav />
     <div className="smart-scanner-grid">
       <section className="smart-scanner-card"><h1>Scanner Settings</h1><p className="scanner-muted">Configure your trade</p>
         <label>Volatility index<select value={market.activeSymbol?.underlying_symbol ?? ''} disabled={busy} onChange={e => market.selectSymbol(e.target.value)}><option value="" disabled>Select a market</option>{market.symbols.filter(s => /volatility/i.test(s.underlying_symbol_name)).map(s => <option key={s.underlying_symbol} value={s.underlying_symbol}>{s.underlying_symbol_name}</option>)}</select></label>

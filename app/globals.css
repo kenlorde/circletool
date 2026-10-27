@@ -492,3 +492,11 @@
 .mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction button.down { background: #c42238; }
 .mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction button > span { min-height: 42px; font-size: 16px; }
 .mobile-terminal:has(.mobile-direction button[aria-label="Buy Over"]) .mobile-direction button small { min-height: 38px; padding: 12px; font-size: 10px; }
+/* Shared Circletool category bar */
+.circle-category-nav{display:flex;flex-shrink:0;gap:0;min-width:0;width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #263a59;background:linear-gradient(90deg,#0a1830,#0d2b56);color:#f0f4fc;position:relative;z-index:2;-webkit-overflow-scrolling:touch}
+.circle-category-nav::-webkit-scrollbar{display:none}
+.circle-category-nav a{display:flex;flex-shrink:0;align-items:center;gap:10px;padding:17px 22px;font-size:16px;font-weight:650;border-right:1px solid #213b63;white-space:nowrap;color:#f0f4fc;text-decoration:none}
+.circle-category-nav svg{color:#ff735a;flex-shrink:0}.circle-category-nav a[aria-current=page]{background:#143d87;box-shadow:inset 0 -2px #4f77d6}.circle-category-nav a:hover{background:#16427a}
+@media(max-width:440px){.circle-category-nav a{font-size:13px;padding:14px;gap:7px}.circle-category-nav svg{width:21px;height:21px}}
+.category-tool-page{display:flex;flex-direction:column;height:100dvh;min-height:0;background:#0b1420;color:white}.category-tool-spacer{height:76px;flex-shrink:0}.category-tool-frame{display:block;border:0;width:100%;flex:1;min-height:0}
+@media(max-width:440px){.category-tool-spacer{height:66px}}
