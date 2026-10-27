@@ -140,3 +140,14 @@ test('a lower replacement price automatically updates the display within the ori
   assert.equal(f.requests.at(-1).buy, 'fresh');
   assert.equal(f.requests.at(-1).price, '10');
 });
+
+test('next direction quotes refresh while purchase confirmation is pending', async () => {
+ const f = fixture(true, true);
+ const purchase = f.render().buyContract('DIGITUNDER');
+ assert.deepEqual(f.refreshes, ['DIGITOVER', 'DIGITUNDER']);
+ assert.equal(f.requests.filter(request => request.buy).length, 1);
+ assert.equal(f.render().isBuying, true);
+ f.finishBuy();
+ await purchase;
+ assert.equal(f.render().isBuying, false);
+});
