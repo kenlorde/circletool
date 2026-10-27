@@ -8,7 +8,7 @@ import { useDerivWSContext } from './deriv-ws-provider';
 import { useLogoSrc } from './logo-src-provider';
 import { Header } from './header';
 
-const sections = [['/dashboard', 'Dashboard'], ['/', 'Manual Trader'], ['/smart-scanner', 'Smart Scanner'], ['/smart-ai', 'Free Bots'], ['/bot-editor', 'Bot Editor'], ['/copy-trading', 'Copy Trading'], ['/tick-analysis', 'Tick Analysis'], ['/charts', 'Charts']];
+const sections = [['/dashboard', 'Dashboard'], ['/', 'Manual Trader'], ['/smart-scanner', 'Smart Scanner'], ['/smart-ai', 'Free Bots'], ['/bot-editor', 'Bot Editor'], ['/multi-ai', 'Multi AI'], ['/copy-trading', 'Copy Trading'], ['/tick-analysis', 'Tick Analysis'], ['/charts', 'Charts']];
 export function AccessGate({ children }: { children: React.ReactNode }) {
   const { auth } = useDerivWSContext();
   const logoSrc = useLogoSrc();

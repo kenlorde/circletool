@@ -59,7 +59,7 @@ export function AIBotsPage() {
       </DialogContent>
     </Dialog>
     <div className={styles.spacer} />
-    <nav className={styles.nav} aria-label="Bot sections"><Link href="/dashboard">Dashboard</Link><Link href="/bot-editor">Bot Builder</Link><span className={styles.current} aria-current="page"><Bot size={21} aria-hidden /> Smart AI</span><Link href="/copy-trading">Copy Trading</Link></nav>
+    <nav className={styles.nav} aria-label="Bot sections"><Link href="/dashboard">Dashboard</Link><Link href="/bot-editor">Bot Builder</Link><span className={styles.current} aria-current="page"><Bot size={21} aria-hidden /> Smart AI</span><Link href="/multi-ai">Multi AI</Link><Link href="/copy-trading">Copy Trading</Link></nav>
     <div className={styles.content}>
       {selected ? <>
         <button className={styles.back} disabled={running} onClick={() => { if (!sessionLock.current) setSelected(null); setView('setup'); }}><ArrowLeft size={18} aria-hidden /> All bots</button>
