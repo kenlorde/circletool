@@ -127,6 +127,7 @@ export function Header({
         <Link href="/" className="hidden xl:inline-flex text-sm font-medium hover:underline">Manual Trader</Link>
         <Link href="/smart-scanner" className="hidden xl:inline-flex text-sm font-medium hover:underline">Smart Scanner</Link>
         <Link href="/smart-ai" className="hidden xl:inline-flex text-sm font-medium hover:underline">Smart AI</Link>
+        <Link href="/multi-ai" className="hidden xl:inline-flex text-sm font-medium hover:underline">Multi AI</Link>
         <Link href="/copy-trading" className="hidden xl:inline-flex text-sm font-medium hover:underline">Copy Trading</Link>
         <Link href="/tick-analysis" className="hidden xl:inline-flex text-sm font-medium hover:underline">Tick Analysis</Link>
         <Link href="/charts" className="hidden xl:inline-flex text-sm font-medium hover:underline">Charts</Link>
@@ -227,6 +228,7 @@ export function Header({
           <Link href="/" onClick={() => setMobileMenuOpen(false)}>Manual Trader</Link>
           <Link href="/smart-scanner" onClick={() => setMobileMenuOpen(false)}>Smart Scanner</Link>
           <Link href="/smart-ai" onClick={() => setMobileMenuOpen(false)}>Smart AI</Link>
+          <Link href="/multi-ai" onClick={() => setMobileMenuOpen(false)}>Multi AI</Link>
           <Link href="/copy-trading" onClick={() => setMobileMenuOpen(false)}>Copy Trading</Link>
           <Link href="/tick-analysis" onClick={() => setMobileMenuOpen(false)}>Tick Analysis</Link>
           <Link href="/charts" onClick={() => setMobileMenuOpen(false)}>Charts</Link>

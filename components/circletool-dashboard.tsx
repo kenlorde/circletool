@@ -17,6 +17,7 @@ const sections = [
   { href: '/', title: 'Manual Trader', icon: Monitor },
   { href: '/smart-scanner', title: 'Smart Scanner', icon: Bot },
   { href: '/smart-ai', title: 'Smart AI', icon: Bot },
+  { href: '/multi-ai', title: 'Multi AI', icon: Bot },
   { href: '/copy-trading', title: 'Copy Trading', icon: BriefcaseBusiness },
   { href: '/tick-analysis', title: 'Tick Analysis', icon: Activity },
   { href: '/charts', title: 'Charts', icon: BarChart3 },
