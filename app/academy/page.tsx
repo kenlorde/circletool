@@ -1,4 +1,5 @@
 'use client';
+import { CircleNav } from '@/components/custom/circle-nav';
 import Link from 'next/link';
 import { Header } from '@/components/custom/header';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
@@ -9,7 +10,9 @@ export default function AcademyPage() {
   const logoSrc = useLogoSrc();
   return <main className="bg-background text-foreground h-dvh overflow-y-auto">
     <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={auth.login} onSignUp={auth.signUp} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} appName="Circletool" />
-    <div className="mx-auto max-w-3xl px-4 pb-16 pt-28">
+    <div className="h-[76px] shrink-0" />
+    <CircleNav />
+    <div className="mx-auto max-w-3xl px-4 pb-16 pt-4">
       <Link href="/" className="text-sm underline">Back to Manual Trader</Link>
       <p className="mt-6 text-sm font-semibold text-red-500">CIRCLETOOL ACADEMY</p>
       <h1 className="mt-2 text-3xl font-bold">Learn Deriv options, step by step</h1>

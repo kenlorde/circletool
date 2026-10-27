@@ -1,8 +1,9 @@
 'use client';
+import { CircleNav } from '@/components/custom/circle-nav';
 
 import { useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { Activity, BarChart3, BriefcaseBusiness, House, ChevronLeft, ChevronRight, Monitor, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, TrendingDown, TrendingUp } from 'lucide-react';
 import { ManualPriceChart } from './manual-price-chart';
 import { AdvancedManualTrader } from './advanced-manual-trader';
 import { ManualTradeTypePicker } from './manual-trade-type-picker';
@@ -106,21 +107,7 @@ export function MobileTradingTerminal(props: MobileTradingTerminalProps) {
 
   return (
     <div className={`mobile-terminal ${advancedType ? 'mobile-terminal-chart' : ''}`}>
-      <nav className="mobile-terminal-nav" aria-label="Trading sections">
-        <Link href="/dashboard"><House size={20} /> Dashboard</Link>
-        <button type="button" className="active" onClick={() => tradeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}>
-          <Monitor size={20} /> Manual Trader
-        </button>
-        <Link href="/smart-scanner"><Activity size={20} /> Smart Scanner</Link>
-        <Link href="/smart-ai"><Activity size={20} /> Smart AI</Link>
-        <Link href="/multi-ai"><Activity size={20} /> Multi AI</Link>
-        <Link href="/copy-trading"><BriefcaseBusiness size={20} /> Copy Trading</Link>
-        <Link href="/tick-analysis"><Activity size={20} /> Tick Analysis</Link>
-        <Link href="/charts">
-          <BarChart3 size={20} /> Charts
-        </Link>
-        <Link href="/academy"><BriefcaseBusiness size={20} /> Academy</Link>
-      </nav>
+      <CircleNav />
 
       {selector && <dialog ref={node => { if (node && !node.open) node.showModal(); }} aria-label="Select duration and stake" onCancel={() => setSelector(null)} style={{ position: 'fixed', inset: 0, width: '100%', height: '100dvh', maxWidth: 'none', maxHeight: 'none', margin: 0, padding: '72px 12px 30px', border: 0, background: 'rgba(0,0,0,.72)', color: '#fff', zIndex: 100 }} onKeyDown={event => { if (event.key === 'Escape') setSelector(null); }} onClick={event => { if (event.target === event.currentTarget) setSelector(null); }}>
         <div style={{ position: 'relative', maxWidth: 420, minHeight: 470, margin: 'auto', padding: '32px 0', background: '#111314', boxShadow: '0 16px 60px #000' }}>

@@ -1,7 +1,8 @@
 'use client';
+import { CircleNav } from '@/components/custom/circle-nav';
 import { useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { Activity, ArrowDown, ArrowRight, BarChart3, Bot, BriefcaseBusiness, House, Monitor, Share2 } from 'lucide-react';
+import { ArrowDown, ArrowRight, Share2 } from 'lucide-react';
 import { Header } from '@/components/custom/header';
 import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
@@ -12,17 +13,7 @@ const actions = [
   { title: 'Bot Editor', description: 'Edit bot fields and XML inside Circletool.', emoji: '🧩', color: '#b68aff', href: '/bot-editor', external: false },
   { title: 'Quick Strategy', description: 'Set your market, stake, and limits in Smart AI.', emoji: '⚡', color: '#ffc94a', href: '/smart-ai', external: false },
 ];
-const sections = [
-  { href: '/dashboard', title: 'Dashboard', icon: House },
-  { href: '/', title: 'Manual Trader', icon: Monitor },
-  { href: '/smart-scanner', title: 'Smart Scanner', icon: Bot },
-  { href: '/smart-ai', title: 'Smart AI', icon: Bot },
-  { href: '/multi-ai', title: 'Multi AI', icon: Bot },
-  { href: '/copy-trading', title: 'Copy Trading', icon: BriefcaseBusiness },
-  { href: '/tick-analysis', title: 'Tick Analysis', icon: Activity },
-  { href: '/charts', title: 'Charts', icon: BarChart3 },
-  { href: '/academy', title: 'Academy', icon: Monitor },
-];
+
 export function CircletoolDashboard() {
   const { auth } = useDerivWSContext();
   const logoSrc = useLogoSrc();
@@ -52,9 +43,7 @@ export function CircletoolDashboard() {
   return <main className="circle-dashboard">
     <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={auth.login} onSignUp={auth.signUp} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} appName="Circletool" />
     <div className="dashboard-header-spacer" />
-    <nav className="dashboard-nav" aria-label="Trading sections">
-      {sections.map(section => <Link key={section.href} href={section.href} className={section.href === '/dashboard' ? 'selected' : ''} aria-current={section.href === '/dashboard' ? 'page' : undefined}><section.icon size={23} aria-hidden />{section.title}</Link>)}
-    </nav>
+    <CircleNav />
     <div className="dashboard-content">
       <section className="dashboard-welcome" aria-label="Welcome"><h1>{greeting}</h1><p>“The trend is your friend — until it ends.”</p></section>
       <section className="dashboard-actions" aria-labelledby="dashboard-actions-title">

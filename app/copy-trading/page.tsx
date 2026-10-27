@@ -1,4 +1,5 @@
 'use client';
+import { CircleNav } from '@/components/custom/circle-nav';
 
 import Link from 'next/link';
 import { Header } from '@/components/custom/header';
@@ -14,6 +15,7 @@ export default function CopyTradingPage() {
     <main className="copy-trading-page">
       <Header authState={auth.authState} accounts={auth.accounts} activeAccount={auth.activeAccount} onLogin={auth.login} onSignUp={auth.signUp} onLogout={auth.logout} onSwitchAccount={auth.switchAccount} logoSrc={logoSrc} actions={<ThemeToggle />} />
       <div className="h-[76px] shrink-0" />
+      <CircleNav />
       <div className="copy-trading-content">
         <Link href="/" className="copy-trading-back">← Manual Trader</Link>
         <CopyTradingPanel />

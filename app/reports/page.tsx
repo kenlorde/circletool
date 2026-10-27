@@ -1,4 +1,5 @@
 'use client';
+import { CircleNav } from '@/components/custom/circle-nav';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -74,6 +75,7 @@ export default function ReportsPage() {
 
       {/* Spacer to push content below fixed header — authenticated users have a taller header */}
       <div className="h-[76px] shrink-0" />
+      <CircleNav />
 
       <div className="flex-1 w-full max-w-7xl mx-auto px-3 py-4 sm:px-4 sm:py-6 pb-14">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4">
