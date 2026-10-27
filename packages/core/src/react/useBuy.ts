@@ -5,7 +5,7 @@ import type { DerivWS } from '../ws';
 import type { ProposalInfo, BuyResponse, BuyResult } from '../types';
 
 interface UseBuyReturn {
-  buyContract: (proposal: ProposalInfo, getFreshProposal?: () => Promise<ProposalInfo>) => Promise<void>;
+  buyContract: (proposal: ProposalInfo, getFreshProposal?: () => Promise<ProposalInfo>, context?: { contractType: string; marketName: string }) => Promise<void>;
   isBuying: boolean;
   buyResult: BuyResult | null;
   buyError: string | null;
@@ -29,7 +29,7 @@ export function useBuy(
     setBuyError(null);
   }, []);
 
-  const buyContract = useCallback(async (proposal: ProposalInfo, getFreshProposal?: () => Promise<ProposalInfo>) => {
+  const buyContract = useCallback(async (proposal: ProposalInfo, getFreshProposal?: () => Promise<ProposalInfo>, context?: { contractType: string; marketName: string }) => {
     if (!ws || !isConnected || purchaseLock.current) return;
     purchaseLock.current = true;
 
@@ -52,6 +52,7 @@ export function useBuy(
       if (!response.buy) throw new Error('Purchase confirmation missing. Check Positions before trying again.');
       if (response.buy) {
         setBuyResult({
+          ...context,
           contractId: response.buy.contract_id,
           buyPrice: response.buy.buy_price,
           payout: response.buy.payout,
