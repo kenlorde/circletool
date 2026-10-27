@@ -91,9 +91,8 @@ export default function MultiAI() {
     if (locked.current || uncertain || !ws || !ready || !valid || !activeSymbol) { setMessage(uncertain ? 'Check Deriv positions before starting another batch.' : 'Log in to a real account and check your settings.'); return; }
     const displayed = quotes[side];
     if (!displayed || !Number.isFinite(Number(displayed.ask_price))) { setMessage('Live quote unavailable. Change a setting to request a fresh quote.'); return; }
-    const total = Number(displayed.ask_price) * Number(count);
     const name = definition.names[definition.sides.indexOf(side as never)];
-    if (!window.confirm(`Buy up to ${count} ${name} contracts? Maximum total cost: ${total.toFixed(2)} ${currency}. Contracts are sent in concurrent groups and can lose money. Entry prices can differ.`)) return;
+    if (!window.confirm(`${count} contracts`)) return;
     locked.current = true; stop.current = false; setRunning(true); setSent(0); setMessage('Starting purchases…');
     const sessionId = auth.activeAccountId;
     const canContinue = () => !stop.current && account.current.ready && account.current.ws === ws && account.current.id === sessionId && currentKey.current === key;
