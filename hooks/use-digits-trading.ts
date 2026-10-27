@@ -269,13 +269,12 @@ export function useDigitsTrading({
     proposalParams ? { ...proposalParams, contractType: firstMode } : null);
   const { proposal: secondProposal, refresh: refreshSecond, updateProposal: updateSecond } = useProposal(tradingWs, tradingIsConnected,
     proposalParams ? { ...proposalParams, contractType: secondMode } : null);
-  // Prepare the next quotes after broker confirmation, outside the next tap's
-  // critical path. Both directions refresh in parallel; no purchase is retried.
-  useEffect(() => {
-    if (!buyResult) return;
-    refreshFirst?.();
-    refreshSecond?.();
-  }, [buyResult?.contractId, refreshFirst, refreshSecond]);
+  // Prepare replacement quotes while the purchase is awaiting confirmation.
+  // The purchase lock remains in place; these requests never buy contracts.
+  const prepareNextQuotes = () => {
+    refreshFirst();
+    refreshSecond();
+  };
 
   // Direction buttons select a mode and purchase it in the same tap. The
   // explicit purchase mode is authoritative; that selection must not invalidate
@@ -315,10 +314,12 @@ export function useDigitsTrading({
       const age = quote.receivedAt === undefined ? Infinity : Date.now() - quote.receivedAt;
       if (age >= 0 && age <= 5000 && !consumedQuoteIds.current.has(quote.id)) {
         consume(quote.id);
-        await buyWithProposal(quote);
+        const purchase = buyWithProposal(quote);
+        prepareNextQuotes();
+        await purchase;
         return;
       }
-      await buyWithProposal(quote, async () => {
+      const purchase = buyWithProposal(quote, async () => {
         const response = await requestWs.send<ProposalResponse>({
           proposal: 1,
           amount: proposalParams.amount,
@@ -352,10 +353,12 @@ export function useDigitsTrading({
         consume(freshQuote.id);
         return freshQuote;
       });
+      prepareNextQuotes();
+      await purchase;
     } finally {
       purchaseLock.current = false;
     }
-  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit, updateSelected, updateFirst, updateSecond]);
+  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit, updateSelected, updateFirst, updateSecond, refreshFirst, refreshSecond]);
 
   return {
     isConnected,
