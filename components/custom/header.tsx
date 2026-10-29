@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { LANGUAGE_LOCALES } from '@/lib/i18n';
 import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { LanguageSwitcher } from '@/components/custom/language-switcher';
-import { Menu, X } from 'lucide-react';
+import { Download, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import type { AuthState, DerivAccount } from '@deriv/core';
 import { useDerivWSContext } from './deriv-ws-provider';
@@ -132,7 +132,7 @@ export function Header({
         <Link href="/tick-analysis" className="hidden xl:inline-flex text-sm font-medium hover:underline">Tick Analysis</Link>
         <Link href="/charts" className="hidden xl:inline-flex text-sm font-medium hover:underline">Charts</Link>
         <Link href="/academy" className="hidden xl:inline-flex text-sm font-medium hover:underline">Academy</Link>
-        <Link href="/install" className="hidden xl:inline-flex text-sm font-medium hover:underline">Install app</Link>
+        <Button asChild variant="outline" size="sm" className="shrink-0 gap-1.5 px-2 sm:px-3"><Link href="/install" aria-label="Download Circletool app"><Download size={16} aria-hidden="true" /><span>Download</span></Link></Button>
         <div className="hidden sm:block">{actions}</div>
         <div className="hidden sm:block"><LanguageSwitcher /></div>
         {isAuthenticated && activeAccount && (
@@ -233,7 +233,7 @@ export function Header({
           <Link href="/tick-analysis" onClick={() => setMobileMenuOpen(false)}>Tick Analysis</Link>
           <Link href="/charts" onClick={() => setMobileMenuOpen(false)}>Charts</Link>
           <Link href="/academy" onClick={() => setMobileMenuOpen(false)}>Academy</Link>
-          <Link href="/install" onClick={() => setMobileMenuOpen(false)}>Install Circletool app</Link>
+          <Link href="/install" onClick={() => setMobileMenuOpen(false)}>Download Circletool app</Link>
           <div className="flex items-center justify-between gap-3"><span>{localize('Appearance')}</span>{actions}</div>
           <div className="flex items-center justify-between gap-3"><span>{localize('Language')}</span><LanguageSwitcher /></div>
           {isAuthenticated && <Button variant="outline" onClick={() => { onLogout(); setMobileMenuOpen(false); }}><Localize i18n_default_text="Log out" /></Button>}
