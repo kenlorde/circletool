@@ -45,6 +45,17 @@ export function AIBotsPage() {
       }
     }
   }
+  function resetTransactions() {
+    if (!accountId || !selected || running || sessionLock.current) return;
+    try {
+      const remaining = readBotTransactions(accountId).filter(row => row.botId !== selected.id);
+      localStorage.setItem(`circletool.bot-transactions.v1:${accountId}`, JSON.stringify(remaining));
+      setTransactions(previous => previous.filter(row => row.botId !== selected.id));
+      setStorageError('');
+    } catch {
+      setStorageError('Could not reset transactions. Please allow device storage and try again.');
+    }
+  }
   const botTransactions = transactions.filter(x => x.accountId === accountId && x.botId === selected?.id);
   const totals = botTransactions.filter(x => x.status !== 'open').reduce<Record<string, number>>((s,x) => { s[x.currency] = (s[x.currency] ?? 0) + (x.profit ?? 0); return s; },{});
   const [query, setQuery] = useState('');
@@ -63,7 +74,10 @@ export function AIBotsPage() {
     <CircleNav />
     <div className={styles.content}>
       {selected ? <>
-        <button className={styles.back} disabled={running} onClick={() => { if (!sessionLock.current) setSelected(null); setView('setup'); }}><ArrowLeft size={18} aria-hidden /> All bots</button>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+<button className={styles.back} disabled={running} onClick={() => { if (!sessionLock.current) setSelected(null); setView('setup'); }}><ArrowLeft size={18} aria-hidden /> All bots</button>
+          {view === 'transactions' && <button type="button" className={styles.back} disabled={running || !accountId || !botTransactions.length || botTransactions.some(row => row.status === 'open')} onClick={resetTransactions} title={running ? 'Stop the bot before resetting transactions' : 'Clear this bot’s transaction history and totals'}>Reset</button>}
+        </div>
         <div className={styles.views} aria-label="Bot pages"><button aria-pressed={view === 'setup'} onClick={() => setView('setup')}>Bot settings</button><button aria-pressed={view === 'transactions'} onClick={() => setView('transactions')}>Transactions <span>{botTransactions.length}</span></button></div>
         <div hidden={view !== 'setup'}>{selected.id === 'smart' ? <SmartAIStrategy sessionLock={sessionLock} onRunStateChange={setRunning} onTransaction={recordTransaction} /> : <SmartAIBot key={selected.id} barrier={selected.barrier} sessionLock={sessionLock} onRunStateChange={setRunning} onTransaction={recordTransaction} />}</div>
         {view === 'setup' && <button className={styles.next} onClick={() => setView('transactions')}>Next: Transactions →</button>}
