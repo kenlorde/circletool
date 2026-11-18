@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 const source=stripTypeScriptTypes(await readFile(new URL('../lib/bot-transactions.ts',import.meta.url),'utf8'));
-const { readBotTransactions,saveBotTransaction,upsertBotTransaction,botContractLabel }=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
-const storage=new Map();globalThis.localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)};
+const { readBotTransactions,saveBotTransaction,upsertBotTransaction,botContractLabel,scheduleBotTransactionReset,readBotTransactionResetAt,cancelBotTransactionReset,resetBotTransactions }=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const storage=new Map();globalThis.localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
 const row={accountId:'A',botId:'expert',contractId:123,symbol:'1HZ100V',currency:'USD',barrier:'8',ticks:1,stake:.35,purchasedAt:100,status:'open'};
 test('purchase becomes one settled row and survives reading again',()=>{
  storage.clear();saveBotTransaction(row);saveBotTransaction({...row,status:'lost',profit:-.35,settledAt:101});
@@ -36,4 +36,31 @@ test('invalid persisted data is rejected and journal caps at 200 newest rows',()
  storage.clear();storage.set('circletool.bot-transactions.v1:A','bad json');assert.deepEqual(readBotTransactions('A'),[]);
  storage.set('circletool.bot-transactions.v1:A',JSON.stringify([{...row,status:'won'},{...row,accountId:'B'}]));assert.deepEqual(readBotTransactions('A'),[]);
  let rows=[];for(let i=0;i<205;i++)rows=upsertBotTransaction(rows,{...row,contractId:i+1,purchasedAt:i});assert.equal(rows.length,200);assert.equal(rows[0].contractId,205);
+});
+
+test('a pending reset is scoped to one account and bot and can be canceled',()=>{
+ storage.clear();
+ const startedAt=Date.now();
+ scheduleBotTransactionReset('A','expert');
+ const deadline=readBotTransactionResetAt('A','expert');
+ assert.ok(deadline>=startedAt+60_000 && deadline<=Date.now()+60_000);
+ assert.equal(readBotTransactionResetAt('A','master'),null);
+ assert.equal(readBotTransactionResetAt('B','expert'),null);
+ cancelBotTransactionReset('A','expert');
+ assert.equal(readBotTransactionResetAt('A','expert'),null);
+});
+test('reset clears settled rows and keeps open contracts until settlement',()=>{
+ storage.clear();
+ scheduleBotTransactionReset('A','expert');
+ const settled={...row,status:'won',profit:.2,settledAt:101};
+ saveBotTransaction(row);
+ saveBotTransaction({...settled,contractId:456});
+ saveBotTransaction({...settled,contractId:789,botId:'master',barrier:'7'});
+ resetBotTransactions('A','expert');
+ assert.deepEqual(readBotTransactions('A').map(x=>x.contractId).sort(),[123,789]);
+ assert.ok(readBotTransactionResetAt('A','expert'));
+ saveBotTransaction(settled);
+ resetBotTransactions('A','expert');
+ assert.deepEqual(readBotTransactions('A').map(x=>x.contractId),[789]);
+ assert.equal(readBotTransactionResetAt('A','expert'),null);
 });

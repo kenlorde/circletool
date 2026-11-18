@@ -43,3 +43,28 @@ export function saveBotTransaction(transaction: BotTransaction): BotTransaction[
   localStorage.setItem(key(transaction.accountId),JSON.stringify(rows));
   return rows;
 }
+
+export const BOT_TRANSACTION_RESET_DELAY_MS = 60_000;
+
+function resetKey(accountId: string, botId: BotTransaction['botId']) {
+  return `circletool.bot-transaction-reset.v1:${accountId}:${botId}`;
+}
+
+export function readBotTransactionResetAt(accountId: string, botId: BotTransaction['botId']) {
+  const deadline = Number(localStorage.getItem(resetKey(accountId, botId)));
+  return Number.isSafeInteger(deadline) && deadline > 0 ? deadline : null;
+}
+
+export function scheduleBotTransactionReset(accountId: string, botId: BotTransaction['botId']) {
+  localStorage.setItem(resetKey(accountId, botId), String(Date.now() + BOT_TRANSACTION_RESET_DELAY_MS));
+}
+
+export function cancelBotTransactionReset(accountId: string, botId: BotTransaction['botId']) {
+  localStorage.removeItem(resetKey(accountId, botId));
+}
+
+export function resetBotTransactions(accountId: string, botId: BotTransaction['botId']) {
+  const remaining = readBotTransactions(accountId).filter(row => row.botId !== botId || row.status === 'open');
+  localStorage.setItem(key(accountId), JSON.stringify(remaining));
+  if (!remaining.some(row => row.botId === botId)) cancelBotTransactionReset(accountId, botId);
+}

@@ -1,6 +1,6 @@
 'use client';
 import { CircleNav } from '@/components/custom/circle-nav';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Search, Bot, ArrowLeft } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -9,7 +9,7 @@ import { useDerivWSContext } from '@/components/custom/deriv-ws-provider';
 import { useLogoSrc } from '@/components/custom/logo-src-provider';
 import { SmartAIBot } from './smart-ai-bot';
 import { SmartAIStrategy } from './smart-ai-strategy';
-import { botContractLabel, readBotTransactions, saveBotTransaction, upsertBotTransaction, type BotTransaction } from '@/lib/bot-transactions';
+import { botContractLabel, cancelBotTransactionReset, readBotTransactionResetAt, readBotTransactions, resetBotTransactions, saveBotTransaction, scheduleBotTransactionReset, upsertBotTransaction, type BotTransaction } from '@/lib/bot-transactions';
 import styles from './ai-bots-page.module.css';
 const bots = [
   { id: 'master', name: 'Master AI', barrier: '7', description: 'Under 7 · winning digits 0–6. Choose your volatility index, ticks, fixed stake and session limits.', ribbon: 'UNDER 7', isNew: false, xml: false },
@@ -34,6 +34,14 @@ export function AIBotsPage() {
   const [view, setView] = useState<'setup' | 'transactions'>('setup');
   useEffect(() => { pageRef.current?.scrollTo({ top: 0 }); }, [view, selected?.id]);
   useEffect(() => { setTransactions(accountId ? readBotTransactions(accountId) : []); setStorageError(''); }, [accountId]);
+  const clearTransactions = useCallback((targetAccountId: string, botId: BotTransaction['botId']) => {
+    resetBotTransactions(targetAccountId, botId);
+    if (accountRef.current === targetAccountId) {
+      setTransactions(previous => previous.filter(row => row.botId !== botId || row.status === 'open'));
+      setStorageError('');
+    }
+  }, []);
+
   function recordTransaction(transaction: BotTransaction) {
     try {
       const rows = saveBotTransaction(transaction);
@@ -43,15 +51,58 @@ export function AIBotsPage() {
         setTransactions(previous => upsertBotTransaction(previous,transaction));
         setStorageError('Transactions are visible for this session, but could not be saved on this device.');
       }
+      return;
+    }
+
+    if (transaction.status === 'open') return;
+    try {
+      const deadline = readBotTransactionResetAt(transaction.accountId, transaction.botId);
+      if (deadline !== null && deadline <= Date.now()) clearTransactions(transaction.accountId, transaction.botId);
+    } catch {
+      if (accountRef.current === transaction.accountId) setStorageError('Could not reset transactions. Please allow device storage and try again.');
     }
   }
+  function handleRunStateChange(isRunning: boolean) {
+    setRunning(isRunning);
+    if (!accountId || !selected) return;
+    try {
+      if (isRunning) {
+        const deadline = readBotTransactionResetAt(accountId, selected.id);
+        if (deadline !== null && deadline <= Date.now()) clearTransactions(accountId, selected.id);
+        cancelBotTransactionReset(accountId, selected.id);
+      } else {
+        scheduleBotTransactionReset(accountId, selected.id);
+      }
+    } catch {
+      if (accountRef.current === accountId) setStorageError('Could not manage the automatic transaction reset on this device.');
+    }
+  }
+
+  useEffect(() => {
+    if (!accountId) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const bot of bots) {
+      try {
+        const deadline = readBotTransactionResetAt(accountId, bot.id);
+        if (deadline === null) continue;
+        timers.push(setTimeout(() => {
+          try {
+            if (readBotTransactionResetAt(accountId, bot.id) === deadline) clearTransactions(accountId, bot.id);
+          } catch {
+            if (accountRef.current === accountId) setStorageError('Could not reset transactions. Please allow device storage and try again.');
+          }
+        }, Math.max(0, deadline - Date.now())));
+      } catch {
+        setStorageError('Could not read automatic transaction reset settings on this device.');
+      }
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [accountId, running, clearTransactions]);
+
   function resetTransactions() {
     if (!accountId || !selected || running || sessionLock.current) return;
     try {
-      const remaining = readBotTransactions(accountId).filter(row => row.botId !== selected.id);
-      localStorage.setItem(`circletool.bot-transactions.v1:${accountId}`, JSON.stringify(remaining));
-      setTransactions(previous => previous.filter(row => row.botId !== selected.id));
-      setStorageError('');
+      clearTransactions(accountId, selected.id);
     } catch {
       setStorageError('Could not reset transactions. Please allow device storage and try again.');
     }
@@ -79,7 +130,7 @@ export function AIBotsPage() {
           {view === 'transactions' && <button type="button" className={styles.back} disabled={running || !accountId || !botTransactions.length || botTransactions.some(row => row.status === 'open')} onClick={resetTransactions} title={running ? 'Stop the bot before resetting transactions' : 'Clear this bot’s transaction history and totals'}>Reset</button>}
         </div>
         <div className={styles.views} aria-label="Bot pages"><button aria-pressed={view === 'setup'} onClick={() => setView('setup')}>Bot settings</button><button aria-pressed={view === 'transactions'} onClick={() => setView('transactions')}>Transactions <span>{botTransactions.length}</span></button></div>
-        <div hidden={view !== 'setup'}>{selected.id === 'smart' ? <SmartAIStrategy sessionLock={sessionLock} onRunStateChange={setRunning} onTransaction={recordTransaction} /> : <SmartAIBot key={selected.id} barrier={selected.barrier} sessionLock={sessionLock} onRunStateChange={setRunning} onTransaction={recordTransaction} />}</div>
+        <div hidden={view !== 'setup'}>{selected.id === 'smart' ? <SmartAIStrategy sessionLock={sessionLock} onRunStateChange={handleRunStateChange} onTransaction={recordTransaction} /> : <SmartAIBot key={selected.id} barrier={selected.barrier} sessionLock={sessionLock} onRunStateChange={handleRunStateChange} onTransaction={recordTransaction} />}</div>
         {view === 'setup' && <button className={styles.next} onClick={() => setView('transactions')}>Next: Transactions →</button>}
         {view === 'transactions' && <section className={styles.transactions} aria-labelledby="transaction-title">
           <h1 id="transaction-title">{selected.name} transactions</h1>

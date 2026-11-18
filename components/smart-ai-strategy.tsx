@@ -117,7 +117,8 @@ export function SmartAIStrategy({ sessionLock, onRunStateChange, onTransaction }
       if (mounted.current) setProgress(previous => ({ ...previous, message: error instanceof Error ? error.message : 'Bot stopped after an error.' }));
     } finally {
       session.current = null; sessionLock.current = false;
-      if (mounted.current) { setBusy(false); onRunStateChange(false); }
+      if (mounted.current) setBusy(false);
+      onRunStateChange(false);
     }
   }
   function stop() {
