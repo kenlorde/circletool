@@ -49,7 +49,8 @@ export function ContractNotifications({
     };
 
     if (buyResult && !purchases.current.has(buyResult.contractId)) {
-      const description = `${LABELS[contractMode]} on ${marketName}`;
+      const purchasedMode = buyResult.contractType as ContractMode | undefined;
+      const description = `${LABELS[purchasedMode ?? contractMode] ?? 'Contract'} on ${buyResult.marketName ?? marketName}`;
       purchases.current.set(buyResult.contractId, { description, closed: false });
       // Keep recent contract metadata without accumulating an unlimited history.
       if (purchases.current.size > 100) {

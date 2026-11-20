@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useProposal, useBuy } from '@deriv/core';
 
 import type {
@@ -296,6 +296,7 @@ export function useDigitsTrading({
       const requestKey = settingsKey;
       const requestWs = tradingWs;
       const requestedMode = mode ?? contractMode;
+      const purchaseContext = { contractType: requestedMode, marketName: activeSymbol?.underlying_symbol_name ?? 'selected market' };
       const assertCurrentSettings = () => {
         const current = currentSettings.current;
         if (current.key !== requestKey || current.ws !== requestWs || !current.connected ||
@@ -314,7 +315,7 @@ export function useDigitsTrading({
       const age = quote.receivedAt === undefined ? Infinity : Date.now() - quote.receivedAt;
       if (age >= 0 && age <= 5000 && !consumedQuoteIds.current.has(quote.id)) {
         consume(quote.id);
-        const purchase = buyWithProposal(quote);
+        const purchase = buyWithProposal(quote, undefined, purchaseContext);
         prepareNextQuotes();
         await purchase;
         return;
@@ -352,13 +353,13 @@ export function useDigitsTrading({
         if (requestedMode === contractMode) updateSelected(freshQuote);
         consume(freshQuote.id);
         return freshQuote;
-      });
+      }, purchaseContext);
       prepareNextQuotes();
       await purchase;
     } finally {
       purchaseLock.current = false;
     }
-  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit, updateSelected, updateFirst, updateSecond, refreshFirst, refreshSecond]);
+  }, [firstMode, secondMode, firstProposal, secondProposal, proposal, tradingIsConnected, isBuying, buyWithProposal, proposalParams, tradingWs, isAuthenticated, settingsKey, contractMode, selectedDigit, updateSelected, updateFirst, updateSecond, refreshFirst, refreshSecond, activeSymbol?.underlying_symbol_name]);
 
   return {
     isConnected,

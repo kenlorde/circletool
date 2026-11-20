@@ -104,6 +104,8 @@ export interface BuyResponse {
 }
 
 export interface BuyResult {
+  contractType?: string;
+  marketName?: string;
   contractId: number;
   buyPrice: number;
   payout: number;

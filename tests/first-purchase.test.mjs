@@ -151,3 +151,17 @@ test('next direction quotes refresh while purchase confirmation is pending', asy
  await purchase;
  assert.equal(f.render().isBuying, false);
 });
+
+test('purchase retains its direction and market if selection changes before confirmation', async () => {
+ const f = fixture(true, true);
+ f.base.activeSymbol.underlying_symbol_name = 'Volatility 100 (1s) Index';
+ const h = f.render();
+ const pending = h.buyContract('DIGITUNDER');
+ h.setContractMode('DIGITOVER');
+ f.base.activeSymbol = { underlying_symbol: 'OTHER', underlying_symbol_name: 'Other market' };
+ f.render();
+ f.finishBuy();
+ await pending;
+ assert.equal(f.render().buyResult.contractType, 'DIGITUNDER');
+ assert.equal(f.render().buyResult.marketName, 'Volatility 100 (1s) Index');
+});
